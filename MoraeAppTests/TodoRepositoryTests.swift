@@ -251,6 +251,52 @@ final class TodoRepositoryTests: XCTestCase {
         XCTAssertEqual(originals.count, 3)
         XCTAssertEqual(todayItems, copies)
     }
+
+    func testLocalSummaryUsesCalendarAndPrioritizesImportantTodos() async throws {
+        let database = try AppDatabase.inMemory()
+        let repository = GRDBTodoRepository(database: database)
+        let yesterday = try LocalDay(rawValue: "2026-03-07")
+        let today = try LocalDay(rawValue: "2026-03-08")
+        let yesterdayDone = try makeTodo(
+            title: "Yesterday done",
+            day: yesterday,
+            status: .completed,
+            sortOrder: 0
+        )
+        let normal = try makeTodo(
+            title: "Normal",
+            day: today,
+            sortOrder: 0,
+            estimatedMinutes: 20
+        )
+        let important = try makeTodo(
+            title: "Important",
+            day: today,
+            priority: .important,
+            sortOrder: 5,
+            estimatedMinutes: 40
+        )
+        let todayDone = try makeTodo(
+            title: "Today done",
+            day: today,
+            status: .completed,
+            sortOrder: 9
+        )
+        for item in [yesterdayDone, normal, important, todayDone] {
+            try await repository.insert(item)
+        }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+
+        let summary = try await BuildLocalTaskSummary(repository: repository)
+            .execute(today: today, calendar: calendar)
+
+        XCTAssertEqual(summary.yesterdayCompleted, [yesterdayDone])
+        XCTAssertEqual(summary.todayPending.map(\.id), [important.id, normal.id])
+        XCTAssertEqual(summary.todayCompletedCount, 1)
+        XCTAssertEqual(summary.todayEstimatedMinutes, 60)
+        XCTAssertEqual(summary.mostImportantTodoID, important.id)
+    }
 }
 
 func makeTodo(
