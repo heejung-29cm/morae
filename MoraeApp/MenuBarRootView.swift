@@ -70,6 +70,7 @@ struct MenuBarRootView: View {
             }
         }
         .frame(width: 380, height: 600)
+        .tint(MoraeColor.accent)
         .task {
             await viewModel.onAppear()
         }
