@@ -5,23 +5,15 @@ struct MoraeApp: App {
     private let container = AppContainer.live()
 
     var body: some Scene {
-        MenuBarExtra("모래", systemImage: "circle.fill") {
-            MenuBarRootView(loader: container.menuBarContentLoader)
+        MenuBarExtra("모래", systemImage: "hourglass") {
+            MenuBarRootView(container: container)
         }
         .menuBarExtraStyle(.window)
-    }
-}
 
-@MainActor
-private struct MenuBarRootView: View {
-    let loader: any MenuBarContentLoading
-    @State private var content = MenuBarContent(message: "")
-
-    var body: some View {
-        Text(content.message)
-            .padding()
-            .task {
-                content = await loader.execute()
-            }
+        Settings {
+            Text("설정은 이후 Sprint에서 제공됩니다.")
+                .frame(width: 360, height: 180)
+                .padding()
+        }
     }
 }

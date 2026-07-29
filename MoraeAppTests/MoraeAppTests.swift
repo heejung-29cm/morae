@@ -288,6 +288,18 @@ final class MoraeAppTests: XCTestCase {
             XCTAssertEqual(error as? TodoMappingError, .invalidStatus("unknown"))
         }
     }
+
+    func testMenuBarSectionsFollowLLDOrderAndHaveEmptyStates() {
+        XCTAssertEqual(
+            MenuBarSection.orderedCases,
+            [.article, .yesterdayCompleted, .todayTodos, .recentAgents]
+        )
+        XCTAssertTrue(
+            MenuBarSection.orderedCases.allSatisfy {
+                !$0.title.isEmpty && !$0.emptyMessage.isEmpty
+            }
+        )
+    }
 }
 
 private struct StubMenuBarContentLoader: MenuBarContentLoading {
