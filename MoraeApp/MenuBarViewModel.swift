@@ -7,12 +7,15 @@ import Observation
 final class MenuBarViewModel {
     private(set) var todayTodos: [TodoItem] = []
     private(set) var yesterdayCompleted: [TodoItem] = []
+    private(set) var yesterdayPending: [TodoItem] = []
+    private(set) var selectedCarryOverIDs: Set<TodoID> = []
     private(set) var errorMessage: String?
     private(set) var validationMessage: String?
     private(set) var deletionCandidate: TodoItem?
     private(set) var recentlyDeleted: TodoItem?
 
     let today: LocalDay
+    let yesterday: LocalDay
 
     private let repository: (any TodoRepository)?
     private let clock: any Clock
@@ -33,7 +36,9 @@ final class MenuBarViewModel {
         self.clock = clock
         self.uuidGenerator = uuidGenerator
         self.calendar = calendar
-        today = clock.localDay(for: clock.now(), calendar: calendar)
+        let currentDay = clock.localDay(for: clock.now(), calendar: calendar)
+        today = currentDay
+        yesterday = Self.previousDay(of: currentDay, calendar: calendar)
     }
 
     func onAppear() async {
@@ -42,9 +47,15 @@ final class MenuBarViewModel {
         }
 
         do {
-            let summary = try await BuildLocalTaskSummary(repository: repository)
-                .execute(today: today, calendar: calendar)
-            yesterdayCompleted = summary.yesterdayCompleted
+            async let todayRequest = repository.list(day: today)
+            async let yesterdayRequest = repository.list(day: yesterday)
+            let (todayItems, yesterdayItems) = try await (
+                todayRequest,
+                yesterdayRequest
+            )
+            todayTodos = todayItems
+            yesterdayCompleted = yesterdayItems.filter { $0.status == .completed }
+            yesterdayPending = yesterdayItems.filter { $0.status == .pending }
         } catch {
             errorMessage = "할 일 요약을 불러오지 못했습니다."
         }
@@ -198,6 +209,87 @@ final class MenuBarViewModel {
         validationMessage = nil
     }
 
+    func movePending(id: TodoID, direction: TodoMoveDirection) async {
+        var pending = todayTodos.filter { $0.status == .pending }
+        guard let sourceIndex = pending.firstIndex(where: { $0.id == id }) else {
+            return
+        }
+        let targetIndex: Int
+        switch direction {
+        case .up:
+            targetIndex = sourceIndex - 1
+        case .down:
+            targetIndex = sourceIndex + 1
+        }
+        guard pending.indices.contains(targetIndex) else { return }
+        pending.swapAt(sourceIndex, targetIndex)
+        await persistPendingOrder(pending)
+    }
+
+    func movePending(id: TodoID, before targetID: TodoID) async {
+        var pending = todayTodos.filter { $0.status == .pending }
+        guard id != targetID,
+              let sourceIndex = pending.firstIndex(where: { $0.id == id }),
+              let targetIndex = pending.firstIndex(where: { $0.id == targetID }) else {
+            return
+        }
+        let moved = pending.remove(at: sourceIndex)
+        let adjustedTarget = sourceIndex < targetIndex ? targetIndex - 1 : targetIndex
+        pending.insert(moved, at: adjustedTarget)
+        await persistPendingOrder(pending)
+    }
+
+    func toggleCarryOverSelection(id: TodoID) {
+        if selectedCarryOverIDs.contains(id) {
+            selectedCarryOverIDs.remove(id)
+        } else if yesterdayPending.contains(where: { $0.id == id }) {
+            selectedCarryOverIDs.insert(id)
+        }
+    }
+
+    func carryOverSelected() async {
+        guard let repository, !selectedCarryOverIDs.isEmpty else { return }
+        do {
+            _ = try await CarryOverPendingTodos(
+                repository: repository,
+                clock: clock,
+                uuidGenerator: uuidGenerator
+            )
+            .execute(
+                from: yesterday,
+                to: today,
+                selectedIDs: yesterdayPending
+                    .filter { selectedCarryOverIDs.contains($0.id) }
+                    .map(\.id)
+            )
+            selectedCarryOverIDs = []
+        } catch {
+            errorMessage = "어제 할 일을 가져오지 못했습니다."
+        }
+    }
+
+    private func persistPendingOrder(_ pendingItems: [TodoItem]) async {
+        guard let repository else { return }
+        var reorderedPending = pendingItems
+        var completed = todayTodos.filter { $0.status == .completed }
+        for index in reorderedPending.indices {
+            reorderedPending[index].sortOrder = index
+        }
+        for index in completed.indices {
+            completed[index].sortOrder = reorderedPending.count + index
+        }
+        let allItems = reorderedPending + completed
+        do {
+            try await repository.reorder(
+                day: today,
+                orderedIDs: allItems.map(\.id)
+            )
+            todayTodos = allItems
+        } catch {
+            errorMessage = "할 일 순서를 변경하지 못했습니다."
+        }
+    }
+
     private func scheduleUndoExpiration() {
         undoExpirationTask?.cancel()
         undoExpirationTask = Task { [weak self] in
@@ -217,10 +309,34 @@ final class MenuBarViewModel {
         }
     }
 
+    private static func previousDay(
+        of day: LocalDay,
+        calendar: Calendar
+    ) -> LocalDay {
+        let parts = day.rawValue.split(separator: "-").compactMap { Int($0) }
+        var components = DateComponents()
+        components.calendar = calendar
+        components.timeZone = calendar.timeZone
+        components.year = parts[0]
+        components.month = parts[1]
+        components.day = parts[2]
+        components.hour = 12
+        guard let date = calendar.date(from: components),
+              let previous = calendar.date(byAdding: .day, value: -1, to: date) else {
+            return day
+        }
+        return LocalDay(date: previous, calendar: calendar)
+    }
+
     deinit {
         observationTask?.cancel()
         undoExpirationTask?.cancel()
     }
+}
+
+enum TodoMoveDirection: Sendable {
+    case up
+    case down
 }
 
 struct TodoEditDraft: Identifiable, Equatable, Sendable {

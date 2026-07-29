@@ -153,6 +153,33 @@ struct MenuBarRootView: View {
                     .accessibilityLabel("완료, \(item.title)")
                 }
             }
+            if !viewModel.yesterdayPending.isEmpty {
+                DisclosureGroup("어제 미완료 가져오기") {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(viewModel.yesterdayPending) { item in
+                            Toggle(
+                                item.title,
+                                isOn: Binding(
+                                    get: {
+                                        viewModel.selectedCarryOverIDs.contains(item.id)
+                                    },
+                                    set: { _ in
+                                        viewModel.toggleCarryOverSelection(id: item.id)
+                                    }
+                                )
+                            )
+                            .toggleStyle(.checkbox)
+                        }
+                        Button("선택 항목을 오늘로 가져오기") {
+                            Task {
+                                await viewModel.carryOverSelected()
+                            }
+                        }
+                        .disabled(viewModel.selectedCarryOverIDs.isEmpty)
+                    }
+                    .padding(.top, 6)
+                }
+            }
         }
     }
 
@@ -180,57 +207,7 @@ struct MenuBarRootView: View {
                 emptyMessage(for: .todayTodos)
             } else {
                 ForEach(viewModel.todayTodos) { item in
-                    HStack(spacing: 8) {
-                        Button {
-                            Task {
-                                await viewModel.toggleTodo(id: item.id)
-                            }
-                        } label: {
-                            Image(
-                                systemName: item.status == .completed
-                                    ? "checkmark.circle.fill"
-                                    : "circle"
-                            )
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(
-                            item.status == .completed
-                                ? "\(item.title) 미완료로 변경"
-                                : "\(item.title) 완료"
-                        )
-
-                        if item.priority == .important {
-                            Image(systemName: "star.fill")
-                                .foregroundStyle(.orange)
-                                .accessibilityLabel("중요")
-                        }
-                        Text(item.title)
-                            .strikethrough(item.status == .completed)
-                            .foregroundStyle(
-                                item.status == .completed ? .secondary : .primary
-                            )
-                            .lineLimit(2)
-                        Spacer()
-                        if let minutes = item.estimatedMinutes {
-                            Text("\(minutes)분")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        Button {
-                            editingDraft = TodoEditDraft(item: item)
-                        } label: {
-                            Image(systemName: "pencil")
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("\(item.title) 편집")
-                        Button {
-                            viewModel.requestDelete(id: item.id)
-                        } label: {
-                            Image(systemName: "trash")
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("\(item.title) 삭제")
-                    }
+                    todayTodoRow(item)
                 }
             }
             if let validationMessage = viewModel.validationMessage {
@@ -259,6 +236,113 @@ struct MenuBarRootView: View {
                     .foregroundStyle(.red)
                     .accessibilityLabel("오류, \(errorMessage)")
             }
+        }
+    }
+
+    @ViewBuilder
+    private func todayTodoRow(_ item: TodoItem) -> some View {
+        if item.status == .pending {
+            todoRowContent(item)
+                .draggable(item.id.storageValue)
+                .dropDestination(for: String.self) { identifiers, _ in
+                    guard let sourceStorageID = identifiers.first,
+                          let source = viewModel.todayTodos.first(
+                            where: { $0.id.storageValue == sourceStorageID }
+                          ),
+                          source.status == .pending else {
+                        return false
+                    }
+                    Task {
+                        await viewModel.movePending(id: source.id, before: item.id)
+                    }
+                    return true
+                }
+        } else {
+            todoRowContent(item)
+        }
+    }
+
+    private func todoRowContent(_ item: TodoItem) -> some View {
+        HStack(spacing: 8) {
+            Button {
+                Task {
+                    await viewModel.toggleTodo(id: item.id)
+                }
+            } label: {
+                Image(
+                    systemName: item.status == .completed
+                        ? "checkmark.circle.fill"
+                        : "circle"
+                )
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(
+                item.status == .completed
+                    ? "\(item.title) 미완료로 변경"
+                    : "\(item.title) 완료"
+            )
+
+            if item.priority == .important {
+                Image(systemName: "star.fill")
+                    .foregroundStyle(.orange)
+                    .accessibilityLabel("중요")
+            }
+            Text(item.title)
+                .strikethrough(item.status == .completed)
+                .foregroundStyle(
+                    item.status == .completed ? .secondary : .primary
+                )
+                .lineLimit(2)
+            Spacer()
+            if let minutes = item.estimatedMinutes {
+                Text("\(minutes)분")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            if item.status == .pending {
+                Button {
+                    Task {
+                        await viewModel.movePending(id: item.id, direction: .up)
+                    }
+                } label: {
+                    Image(systemName: "arrow.up")
+                }
+                .buttonStyle(.plain)
+                .disabled(
+                    viewModel.todayTodos
+                        .filter { $0.status == .pending }
+                        .first?.id == item.id
+                )
+                .accessibilityLabel("\(item.title) 위로 이동")
+                Button {
+                    Task {
+                        await viewModel.movePending(id: item.id, direction: .down)
+                    }
+                } label: {
+                    Image(systemName: "arrow.down")
+                }
+                .buttonStyle(.plain)
+                .disabled(
+                    viewModel.todayTodos
+                        .filter { $0.status == .pending }
+                        .last?.id == item.id
+                )
+                .accessibilityLabel("\(item.title) 아래로 이동")
+            }
+            Button {
+                editingDraft = TodoEditDraft(item: item)
+            } label: {
+                Image(systemName: "pencil")
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(item.title) 편집")
+            Button {
+                viewModel.requestDelete(id: item.id)
+            } label: {
+                Image(systemName: "trash")
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(item.title) 삭제")
         }
     }
 

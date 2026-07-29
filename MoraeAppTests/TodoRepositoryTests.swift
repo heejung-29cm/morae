@@ -366,6 +366,55 @@ final class TodoRepositoryTests: XCTestCase {
         let stored = try await repository.list(day: viewModel.today)
         XCTAssertEqual(stored.map(\.id), [created.id])
     }
+
+    @MainActor
+    func testMenuBarViewModelReordersAndCarriesOverWithKeyboardPath() async throws {
+        let database = try AppDatabase.inMemory()
+        let repository = GRDBTodoRepository(database: database)
+        let instant = Date(unixMilliseconds: 1_775_040_000_000)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let newUUID = UUID(uuidString: "D411AB16-06F6-4A26-9EF1-C757690943AB")!
+        let viewModel = MenuBarViewModel(
+            repository: repository,
+            clock: FixedClock(instant: instant),
+            uuidGenerator: FixedUUIDGenerator(uuid: newUUID),
+            calendar: calendar
+        )
+        let first = try makeTodo(
+            title: "First",
+            day: viewModel.today,
+            sortOrder: 0
+        )
+        let second = try makeTodo(
+            title: "Second",
+            day: viewModel.today,
+            sortOrder: 1
+        )
+        let yesterdayPending = try makeTodo(
+            title: "Carry",
+            day: viewModel.yesterday,
+            sortOrder: 0
+        )
+        for item in [first, second, yesterdayPending] {
+            try await repository.insert(item)
+        }
+        await viewModel.onAppear()
+
+        await viewModel.movePending(id: first.id, direction: .down)
+        let reordered = try await repository.list(day: viewModel.today)
+        XCTAssertEqual(reordered.prefix(2).map(\.id), [second.id, first.id])
+
+        viewModel.toggleCarryOverSelection(id: yesterdayPending.id)
+        XCTAssertEqual(viewModel.selectedCarryOverIDs, [yesterdayPending.id])
+        await viewModel.carryOverSelected()
+
+        let carried = try await repository.list(day: viewModel.today)
+        XCTAssertTrue(carried.contains(where: { $0.id.rawValue == newUUID }))
+        XCTAssertTrue(viewModel.selectedCarryOverIDs.isEmpty)
+        let originals = try await repository.list(day: viewModel.yesterday)
+        XCTAssertEqual(originals.map(\.id), [yesterdayPending.id])
+    }
 }
 
 func makeTodo(
