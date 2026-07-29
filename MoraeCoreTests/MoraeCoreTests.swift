@@ -41,4 +41,63 @@ final class MoraeCoreTests: XCTestCase {
         )
         XCTAssertEqual(decoded, id)
     }
+
+    func testStatusRawValuesMatchPersistenceContract() {
+        XCTAssertEqual(TodoStatus.completed.rawValue, "completed")
+        XCTAssertEqual(TodoPriority.important.rawValue, 1)
+        XCTAssertEqual(BriefingStatus.succeeded.rawValue, "succeeded")
+        XCTAssertEqual(AgentSource.claude.rawValue, "claude")
+        XCTAssertEqual(AgentStatus.attentionRequired.rawValue, "attention_required")
+        XCTAssertEqual(AgentClosureReason.terminalEvent.rawValue, "terminal_event")
+        XCTAssertEqual(BriefingErrorCode.noEnabledFeeds.rawValue, "no_enabled_feeds")
+        XCTAssertEqual(
+            AgentIngressErrorCode.unsupportedTransport.rawValue,
+            "unsupported_transport"
+        )
+    }
+
+    func testStatusesCodableRoundTrip() throws {
+        try assertCodableRoundTrip(TodoStatus.allCases)
+        try assertCodableRoundTrip(TodoPriority.allCases)
+        try assertCodableRoundTrip(BriefingStatus.allCases)
+        try assertCodableRoundTrip(AgentSource.allCases)
+        try assertCodableRoundTrip(AgentStatus.allCases)
+        try assertCodableRoundTrip(AgentClosureReason.allCases)
+        try assertCodableRoundTrip(BriefingErrorCode.allCases)
+        try assertCodableRoundTrip(AgentIngressErrorCode.allCases)
+    }
+
+    func testAgentStatusRankPreventsTerminalStateDowngrade() {
+        XCTAssertGreaterThan(AgentStatus.failed.rank, AgentStatus.completed.rank)
+        XCTAssertGreaterThan(AgentStatus.completed.rank, AgentStatus.responded.rank)
+        XCTAssertGreaterThan(
+            AgentStatus.responded.rank,
+            AgentStatus.attentionRequired.rank
+        )
+        XCTAssertGreaterThan(AgentStatus.attentionRequired.rank, AgentStatus.running.rank)
+        XCTAssertGreaterThan(AgentStatus.running.rank, AgentStatus.cancelled.rank)
+    }
+
+    func testAppErrorCodableRoundTripAndLocalizedGuidance() throws {
+        let error = AppError(
+            code: "database_open_failed",
+            userMessage: "Morae could not open its local database.",
+            recovery: "Check disk availability, then reopen Morae."
+        )
+        let decoded = try JSONDecoder().decode(
+            AppError.self,
+            from: JSONEncoder().encode(error)
+        )
+
+        XCTAssertEqual(decoded, error)
+        XCTAssertEqual(error.errorDescription, error.userMessage)
+        XCTAssertEqual(error.recoverySuggestion, error.recovery)
+    }
+
+    private func assertCodableRoundTrip<Value>(
+        _ values: [Value]
+    ) throws where Value: Codable & Equatable {
+        let data = try JSONEncoder().encode(values)
+        XCTAssertEqual(try JSONDecoder().decode([Value].self, from: data), values)
+    }
 }
