@@ -37,13 +37,16 @@ enum MenuBarSection: String, CaseIterable, Sendable {
 struct MenuBarRootView: View {
     let container: AppContainer
     @State private var viewModel: MenuBarViewModel
+    @State private var quickAddTitle = ""
+    @State private var editingDraft: TodoEditDraft?
 
     init(container: AppContainer) {
         self.container = container
         _viewModel = State(
             initialValue: MenuBarViewModel(
                 repository: container.todoRepository,
-                clock: container.clock
+                clock: container.clock,
+                uuidGenerator: container.uuidGenerator
             )
         )
     }
@@ -69,6 +72,41 @@ struct MenuBarRootView: View {
         .frame(width: 380, height: 600)
         .task {
             await viewModel.onAppear()
+        }
+        .sheet(item: $editingDraft) { draft in
+            TodoEditorView(
+                initialDraft: draft,
+                onSave: { updatedDraft in
+                    if await viewModel.updateTodo(updatedDraft) {
+                        editingDraft = nil
+                    }
+                },
+                onCancel: {
+                    editingDraft = nil
+                }
+            )
+        }
+        .alert(
+            "할 일을 삭제할까요?",
+            isPresented: Binding(
+                get: { viewModel.deletionCandidate != nil },
+                set: { presented in
+                    if !presented {
+                        viewModel.cancelDelete()
+                    }
+                }
+            )
+        ) {
+            Button("삭제", role: .destructive) {
+                Task {
+                    await viewModel.confirmDelete()
+                }
+            }
+            Button("취소", role: .cancel) {
+                viewModel.cancelDelete()
+            }
+        } message: {
+            Text(viewModel.deletionCandidate?.title ?? "")
         }
     }
 
@@ -120,6 +158,24 @@ struct MenuBarRootView: View {
 
     private var todaySection: some View {
         sectionContainer(.todayTodos) {
+            HStack {
+                TextField("빠른 할 일 추가", text: $quickAddTitle)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit {
+                        submitQuickAdd()
+                    }
+                    .onExitCommand {
+                        quickAddTitle = ""
+                        viewModel.clearValidationMessage()
+                    }
+                    .accessibilityLabel("빠른 할 일 추가")
+                Button {
+                    submitQuickAdd()
+                } label: {
+                    Image(systemName: "plus")
+                }
+                .accessibilityLabel("할 일 저장")
+            }
             if viewModel.todayTodos.isEmpty {
                 emptyMessage(for: .todayTodos)
             } else {
@@ -160,14 +216,57 @@ struct MenuBarRootView: View {
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
+                        Button {
+                            editingDraft = TodoEditDraft(item: item)
+                        } label: {
+                            Image(systemName: "pencil")
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("\(item.title) 편집")
+                        Button {
+                            viewModel.requestDelete(id: item.id)
+                        } label: {
+                            Image(systemName: "trash")
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("\(item.title) 삭제")
                     }
                 }
+            }
+            if let validationMessage = viewModel.validationMessage {
+                Text(validationMessage)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .accessibilityLabel("입력 오류, \(validationMessage)")
+            }
+            if let deleted = viewModel.recentlyDeleted {
+                HStack {
+                    Text("‘\(deleted.title)’을 삭제했습니다.")
+                        .font(.caption)
+                    Spacer()
+                    Button("실행 취소") {
+                        Task {
+                            await viewModel.undoDelete()
+                        }
+                    }
+                }
+                .padding(8)
+                .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
             }
             if let errorMessage = viewModel.errorMessage {
                 Text(errorMessage)
                     .font(.caption)
                     .foregroundStyle(.red)
                     .accessibilityLabel("오류, \(errorMessage)")
+            }
+        }
+    }
+
+    private func submitQuickAdd() {
+        let title = quickAddTitle
+        Task {
+            if await viewModel.addTodo(title: title) {
+                quickAddTitle = ""
             }
         }
     }
@@ -211,5 +310,47 @@ struct MenuBarRootView: View {
             }
         }
         .accessibilityElement(children: .combine)
+    }
+}
+
+private struct TodoEditorView: View {
+    @State private var draft: TodoEditDraft
+    let onSave: (TodoEditDraft) async -> Void
+    let onCancel: () -> Void
+
+    init(
+        initialDraft: TodoEditDraft,
+        onSave: @escaping (TodoEditDraft) async -> Void,
+        onCancel: @escaping () -> Void
+    ) {
+        _draft = State(initialValue: initialDraft)
+        self.onSave = onSave
+        self.onCancel = onCancel
+    }
+
+    var body: some View {
+        Form {
+            TextField("제목", text: $draft.title)
+            Toggle("중요", isOn: Binding(
+                get: { draft.priority == .important },
+                set: { draft.priority = $0 ? .important : .normal }
+            ))
+            TextField("예상 시간(분)", text: $draft.estimatedMinutes)
+            TextField("관련 URL", text: $draft.relatedURL)
+            TextField("프로젝트 경로", text: $draft.projectPath)
+            HStack {
+                Spacer()
+                Button("취소", role: .cancel, action: onCancel)
+                    .keyboardShortcut(.cancelAction)
+                Button("저장") {
+                    Task {
+                        await onSave(draft)
+                    }
+                }
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding()
+        .frame(width: 360)
     }
 }

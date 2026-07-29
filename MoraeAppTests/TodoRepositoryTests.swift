@@ -320,6 +320,52 @@ final class TodoRepositoryTests: XCTestCase {
         let afterCompletion = try await iterator.next()
         XCTAssertEqual(afterCompletion, [completed])
     }
+
+    @MainActor
+    func testMenuBarViewModelAddEditDeleteConfirmAndUndoFlow() async throws {
+        let database = try AppDatabase.inMemory()
+        let repository = GRDBTodoRepository(database: database)
+        let instant = Date(unixMilliseconds: 1_775_040_000_000)
+        let uuid = UUID(uuidString: "F47ADFE1-0AAE-42D6-9D38-9EC1FBDBE35C")!
+        let viewModel = MenuBarViewModel(
+            repository: repository,
+            clock: FixedClock(instant: instant),
+            uuidGenerator: FixedUUIDGenerator(uuid: uuid),
+            calendar: Calendar(identifier: .gregorian)
+        )
+
+        let invalidAddResult = await viewModel.addTodo(title: "  ")
+        XCTAssertFalse(invalidAddResult)
+        XCTAssertEqual(viewModel.validationMessage, "제목을 입력해 주세요.")
+        let addResult = await viewModel.addTodo(title: "New todo")
+        XCTAssertTrue(addResult)
+
+        let created = try XCTUnwrap(viewModel.todayTodos.first)
+        var draft = TodoEditDraft(item: created)
+        draft.title = "Edited todo"
+        draft.priority = .important
+        draft.estimatedMinutes = "45"
+        draft.relatedURL = "https://example.com"
+        let updateResult = await viewModel.updateTodo(draft)
+        XCTAssertTrue(updateResult)
+        XCTAssertEqual(viewModel.todayTodos.first?.title, "Edited todo")
+        XCTAssertEqual(viewModel.todayTodos.first?.estimatedMinutes, 45)
+
+        viewModel.requestDelete(id: created.id)
+        XCTAssertEqual(viewModel.deletionCandidate?.id, created.id)
+        viewModel.cancelDelete()
+        XCTAssertNil(viewModel.deletionCandidate)
+
+        viewModel.requestDelete(id: created.id)
+        await viewModel.confirmDelete()
+        XCTAssertTrue(viewModel.todayTodos.isEmpty)
+        XCTAssertEqual(viewModel.recentlyDeleted?.id, created.id)
+
+        await viewModel.undoDelete()
+        XCTAssertEqual(viewModel.todayTodos.map(\.id), [created.id])
+        let stored = try await repository.list(day: viewModel.today)
+        XCTAssertEqual(stored.map(\.id), [created.id])
+    }
 }
 
 func makeTodo(

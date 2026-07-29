@@ -18,6 +18,7 @@ struct EmptyMenuBarContentLoader: MenuBarContentLoading {
 @MainActor
 final class AppContainer {
     let clock: any Clock
+    let uuidGenerator: any UUIDGenerating
     let menuBarContentLoader: any MenuBarContentLoading
     let database: AppDatabase?
     let todoRepository: (any TodoRepository)?
@@ -25,12 +26,14 @@ final class AppContainer {
 
     init(
         clock: any Clock,
+        uuidGenerator: any UUIDGenerating = SystemUUIDGenerator(),
         menuBarContentLoader: any MenuBarContentLoading,
         database: AppDatabase? = nil,
         todoRepository: (any TodoRepository)? = nil,
         startupError: AppError? = nil
     ) {
         self.clock = clock
+        self.uuidGenerator = uuidGenerator
         self.menuBarContentLoader = menuBarContentLoader
         self.database = database
         self.todoRepository = todoRepository
