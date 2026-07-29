@@ -31,6 +31,15 @@ enum MenuBarSection: String, CaseIterable, Sendable {
         case .recentAgents: "수신한 에이전트 기록이 없습니다."
         }
     }
+
+    var systemImage: String {
+        switch self {
+        case .article: "newspaper"
+        case .yesterdayCompleted: "checkmark.circle"
+        case .todayTodos: "list.bullet"
+        case .recentAgents: "terminal"
+        }
+    }
 }
 
 @MainActor
@@ -66,10 +75,12 @@ struct MenuBarRootView: View {
                         emptySection(.recentAgents)
                     }
                 }
-                .padding(16)
+                .padding(.horizontal, MoraeSpacing.large)
+                .padding(.vertical, MoraeSpacing.medium)
             }
         }
-        .frame(width: 380, height: 600)
+        .frame(width: 392, height: 700)
+        .background(.ultraThinMaterial)
         .tint(MoraeColor.accent)
         .task {
             await viewModel.onAppear()
@@ -77,34 +88,52 @@ struct MenuBarRootView: View {
     }
 
     private var header: some View {
-        HStack(alignment: .center) {
-            VStack(alignment: .leading, spacing: 2) {
+        HStack(alignment: .center, spacing: MoraeSpacing.medium) {
+            Image(systemName: "hourglass")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(MoraeColor.accent)
+                .frame(width: 28, height: 28)
+                .background(
+                    MoraeColor.selectedFill,
+                    in: RoundedRectangle(cornerRadius: MoraeRadius.medium)
+                )
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 1) {
                 Text("모래")
-                    .font(.headline)
-                Text(viewModel.today.rawValue)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 15, weight: .semibold))
+                Text(localizedToday)
+                    .font(.caption2)
+                    .foregroundStyle(MoraeColor.secondaryForeground)
             }
             Spacer()
-            Button("오늘 브리핑 만들기", systemImage: "sparkles") {}
-                .disabled(true)
-                .help("수동 브리핑은 Sprint 3에서 연결됩니다.")
+            Button {} label: {
+                Label("오늘 브리핑 만들기", systemImage: "sparkles")
+                    .labelStyle(.iconOnly)
+            }
+            .buttonStyle(.borderless)
+            .disabled(true)
+            .help("수동 브리핑은 Sprint 3에서 연결됩니다.")
             SettingsLink {
                 Label("설정", systemImage: "gearshape")
                     .labelStyle(.iconOnly)
             }
+            .buttonStyle(.borderless)
             .help("설정 열기")
             .accessibilityLabel("설정 열기")
         }
-        .padding(16)
+        .padding(.horizontal, MoraeSpacing.large)
+        .padding(.vertical, 11)
     }
 
     private var articleSection: some View {
-        emptySection(.article)
+        emptySection(.article, count: 0)
     }
 
     private var yesterdaySection: some View {
-        sectionContainer(.yesterdayCompleted) {
+        sectionContainer(
+            .yesterdayCompleted,
+            count: viewModel.yesterdayCompleted.count
+        ) {
             if viewModel.yesterdayCompleted.isEmpty {
                 emptyMessage(for: .yesterdayCompleted)
             } else {
@@ -150,7 +179,7 @@ struct MenuBarRootView: View {
     }
 
     private var todaySection: some View {
-        sectionContainer(.todayTodos) {
+        sectionContainer(.todayTodos, count: viewModel.todayTodos.count) {
             HStack {
                 TextField("빠른 할 일 추가", text: $quickAddTitle)
                     .textFieldStyle(.roundedBorder)
@@ -360,22 +389,64 @@ struct MenuBarRootView: View {
         }
     }
 
-    private func emptySection(_ section: MenuBarSection) -> some View {
-        sectionContainer(section) {
+    private func emptySection(
+        _ section: MenuBarSection,
+        count: Int? = 0
+    ) -> some View {
+        sectionContainer(section, count: count) {
             emptyMessage(for: section)
         }
     }
 
     private func sectionContainer<Content: View>(
         _ section: MenuBarSection,
+        count: Int? = nil,
         @ViewBuilder content: () -> Content
     ) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(section.title)
-                .font(.headline)
+        VStack(alignment: .leading, spacing: MoraeSpacing.small) {
+            HStack(spacing: MoraeSpacing.small) {
+                Label(section.title, systemImage: section.systemImage)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(MoraeColor.foreground)
+                Spacer(minLength: MoraeSpacing.small)
+                if let count {
+                    Text(count, format: .number)
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(MoraeColor.secondaryForeground)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(
+                            MoraeColor.subtleFill,
+                            in: Capsule()
+                        )
+                        .accessibilityLabel("\(count)개")
+                }
+            }
             content()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var localizedToday: String {
+        let components = viewModel.today.rawValue
+            .split(separator: "-")
+            .compactMap { Int($0) }
+        guard components.count == 3 else {
+            return viewModel.today.rawValue
+        }
+        var calendar = Calendar.autoupdatingCurrent
+        calendar.timeZone = .autoupdatingCurrent
+        guard let date = calendar.date(
+            from: DateComponents(
+                year: components[0],
+                month: components[1],
+                day: components[2],
+                hour: 12
+            )
+        ) else {
+            return viewModel.today.rawValue
+        }
+        return date.formatted(date: .complete, time: .omitted)
     }
 
     private func emptyMessage(for section: MenuBarSection) -> some View {
