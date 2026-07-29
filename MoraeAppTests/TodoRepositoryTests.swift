@@ -129,6 +129,30 @@ final class TodoRepositoryTests: XCTestCase {
         let stored = try await repository.list(day: day)
         XCTAssertEqual(stored, [pending])
     }
+
+    func testDeleteRemovesOnlyTargetAndMissingIDIsNoOp() async throws {
+        let database = try AppDatabase.inMemory()
+        let repository = GRDBTodoRepository(database: database)
+        let day = try LocalDay(rawValue: "2026-07-29")
+        let retained = try makeTodo(
+            title: "Retained",
+            day: day,
+            sortOrder: 0
+        )
+        let deleted = try makeTodo(
+            title: "Deleted",
+            day: day,
+            sortOrder: 1
+        )
+        try await repository.insert(retained)
+        try await repository.insert(deleted)
+
+        try await repository.delete(id: deleted.id)
+        try await repository.delete(id: TodoID(rawValue: UUID()))
+
+        let remaining = try await repository.list(day: day)
+        XCTAssertEqual(remaining, [retained])
+    }
 }
 
 func makeTodo(

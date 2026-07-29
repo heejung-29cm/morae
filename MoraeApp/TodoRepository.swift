@@ -203,4 +203,10 @@ final class GRDBTodoRepository: @unchecked Sendable {
             return try record.domain()
         }
     }
+
+    func delete(id: TodoID) async throws {
+        try await writer.write { database in
+            _ = try TodoRecord.deleteOne(database, key: id.storageValue)
+        }
+    }
 }
