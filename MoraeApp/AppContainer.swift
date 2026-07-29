@@ -20,17 +20,20 @@ final class AppContainer {
     let clock: any Clock
     let menuBarContentLoader: any MenuBarContentLoading
     let database: AppDatabase?
+    let todoRepository: (any TodoRepository)?
     let startupError: AppError?
 
     init(
         clock: any Clock,
         menuBarContentLoader: any MenuBarContentLoading,
         database: AppDatabase? = nil,
+        todoRepository: (any TodoRepository)? = nil,
         startupError: AppError? = nil
     ) {
         self.clock = clock
         self.menuBarContentLoader = menuBarContentLoader
         self.database = database
+        self.todoRepository = todoRepository
         self.startupError = startupError
     }
 
@@ -41,7 +44,8 @@ final class AppContainer {
             return AppContainer(
                 clock: SystemClock(),
                 menuBarContentLoader: EmptyMenuBarContentLoader(),
-                database: database
+                database: database,
+                todoRepository: GRDBTodoRepository(database: database)
             )
         } catch {
             let startupError = AppError(

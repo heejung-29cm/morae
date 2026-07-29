@@ -36,11 +36,15 @@ enum MenuBarSection: String, CaseIterable, Sendable {
 @MainActor
 struct MenuBarRootView: View {
     let container: AppContainer
+    @State private var viewModel: MenuBarViewModel
 
-    private var today: LocalDay {
-        container.clock.localDay(
-            for: container.clock.now(),
-            calendar: .autoupdatingCurrent
+    init(container: AppContainer) {
+        self.container = container
+        _viewModel = State(
+            initialValue: MenuBarViewModel(
+                repository: container.todoRepository,
+                clock: container.clock
+            )
         )
     }
 
@@ -53,15 +57,19 @@ struct MenuBarRootView: View {
                     if let startupError = container.startupError {
                         startupErrorView(startupError)
                     } else {
-                        ForEach(MenuBarSection.orderedCases, id: \.self) { section in
-                            emptySection(section)
-                        }
+                        articleSection
+                        yesterdaySection
+                        todaySection
+                        emptySection(.recentAgents)
                     }
                 }
                 .padding(16)
             }
         }
         .frame(width: 380, height: 600)
+        .task {
+            await viewModel.onAppear()
+        }
     }
 
     private var header: some View {
@@ -69,7 +77,7 @@ struct MenuBarRootView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("모래")
                     .font(.headline)
-                Text(today.rawValue)
+                Text(viewModel.today.rawValue)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -87,19 +95,109 @@ struct MenuBarRootView: View {
         .padding(16)
     }
 
+    private var articleSection: some View {
+        emptySection(.article)
+    }
+
+    private var yesterdaySection: some View {
+        sectionContainer(.yesterdayCompleted) {
+            if viewModel.yesterdayCompleted.isEmpty {
+                emptyMessage(for: .yesterdayCompleted)
+            } else {
+                ForEach(viewModel.yesterdayCompleted) { item in
+                    HStack {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                        Text(item.title)
+                            .lineLimit(2)
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("완료, \(item.title)")
+                }
+            }
+        }
+    }
+
+    private var todaySection: some View {
+        sectionContainer(.todayTodos) {
+            if viewModel.todayTodos.isEmpty {
+                emptyMessage(for: .todayTodos)
+            } else {
+                ForEach(viewModel.todayTodos) { item in
+                    HStack(spacing: 8) {
+                        Button {
+                            Task {
+                                await viewModel.toggleTodo(id: item.id)
+                            }
+                        } label: {
+                            Image(
+                                systemName: item.status == .completed
+                                    ? "checkmark.circle.fill"
+                                    : "circle"
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(
+                            item.status == .completed
+                                ? "\(item.title) 미완료로 변경"
+                                : "\(item.title) 완료"
+                        )
+
+                        if item.priority == .important {
+                            Image(systemName: "star.fill")
+                                .foregroundStyle(.orange)
+                                .accessibilityLabel("중요")
+                        }
+                        Text(item.title)
+                            .strikethrough(item.status == .completed)
+                            .foregroundStyle(
+                                item.status == .completed ? .secondary : .primary
+                            )
+                            .lineLimit(2)
+                        Spacer()
+                        if let minutes = item.estimatedMinutes {
+                            Text("\(minutes)분")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+            if let errorMessage = viewModel.errorMessage {
+                Text(errorMessage)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .accessibilityLabel("오류, \(errorMessage)")
+            }
+        }
+    }
+
     private func emptySection(_ section: MenuBarSection) -> some View {
+        sectionContainer(section) {
+            emptyMessage(for: section)
+        }
+    }
+
+    private func sectionContainer<Content: View>(
+        _ section: MenuBarSection,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(section.title)
                 .font(.headline)
-            Text(section.emptyMessage)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(12)
-                .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+            content()
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(section.title), \(section.emptyMessage)")
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func emptyMessage(for section: MenuBarSection) -> some View {
+        Text(section.emptyMessage)
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(12)
+            .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+            .accessibilityLabel("\(section.title), \(section.emptyMessage)")
     }
 
     private func startupErrorView(_ error: AppError) -> some View {

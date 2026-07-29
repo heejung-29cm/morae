@@ -18,6 +18,7 @@ protocol TodoRepository: Sendable {
         newIDs: [TodoID],
         at: Date
     ) async throws -> [TodoItem]
+    func observation(day: LocalDay) -> AsyncValueObservation<[TodoItem]>
 }
 
 enum TodoMappingError: Error, Equatable, Sendable {
@@ -158,6 +159,28 @@ final class GRDBTodoRepository: @unchecked Sendable {
             )
             .map { try $0.domain() }
         }
+    }
+
+    func observation(day: LocalDay) -> AsyncValueObservation<[TodoItem]> {
+        ValueObservation
+            .tracking { database in
+                try TodoRecord.fetchAll(
+                    database,
+                    sql: """
+                        SELECT *
+                        FROM tasks
+                        WHERE task_day = ?
+                        ORDER BY
+                            CASE status WHEN 'pending' THEN 0 ELSE 1 END,
+                            sort_order ASC,
+                            created_at_ms ASC,
+                            id ASC
+                        """,
+                    arguments: [day.rawValue]
+                )
+                .map { try $0.domain() }
+            }
+            .values(in: writer, bufferingPolicy: .bufferingNewest(1))
     }
 
     func listCompleted(day: LocalDay) async throws -> [TodoItem] {

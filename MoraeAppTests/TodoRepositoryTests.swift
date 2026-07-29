@@ -297,6 +297,29 @@ final class TodoRepositoryTests: XCTestCase {
         XCTAssertEqual(summary.todayEstimatedMinutes, 60)
         XCTAssertEqual(summary.mostImportantTodoID, important.id)
     }
+
+    func testTodoObservationEmitsInsertAndCompletionChanges() async throws {
+        let database = try AppDatabase.inMemory()
+        let repository = GRDBTodoRepository(database: database)
+        let day = try LocalDay(rawValue: "2026-07-29")
+        let item = try makeTodo(title: "Observed", day: day, sortOrder: 0)
+        var iterator = repository.observation(day: day).makeAsyncIterator()
+
+        let initial = try await iterator.next()
+        XCTAssertEqual(initial, [])
+        try await repository.insert(item)
+        let afterInsert = try await iterator.next()
+        XCTAssertEqual(afterInsert, [item])
+
+        let completedAt = Date(unixMilliseconds: 1_775_040_000_000)
+        let completed = try await repository.setCompletion(
+            id: item.id,
+            isCompleted: true,
+            at: completedAt
+        )
+        let afterCompletion = try await iterator.next()
+        XCTAssertEqual(afterCompletion, [completed])
+    }
 }
 
 func makeTodo(
