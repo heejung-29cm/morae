@@ -42,6 +42,51 @@ final class MoraeAppTests: XCTestCase {
 
         XCTAssertEqual(content, MenuBarContent(message: "Injected"))
     }
+
+    func testLogCategoriesMatchLLDContract() {
+        XCTAssertEqual(
+            Set(MoraeLogCategory.allCases.map(\.rawValue)),
+            Set([
+                "app-lifecycle",
+                "database",
+                "briefing",
+                "feed",
+                "agent-ipc",
+                "agent-normalization",
+                "notification",
+            ])
+        )
+        XCTAssertEqual(MoraeLogger.subsystem, "io.github.heejung-29cm.morae")
+    }
+
+    func testPublicLogTokenRedactsForbiddenFieldShapes() {
+        let queryURL = PublicLogToken("https://example.com?prompt=secret")
+        let projectPath = PublicLogToken("/Users/person/secret-project")
+        let rawPayload = PublicLogToken("{\"prompt\":\"secret\"}")
+
+        XCTAssertEqual(queryURL, .redacted)
+        XCTAssertEqual(projectPath, .redacted)
+        XCTAssertEqual(rawPayload, .redacted)
+        XCTAssertEqual(PublicLogToken("feed_unavailable").description, "feed_unavailable")
+    }
+
+    func testPublicLogMetadataContainsOnlyWhitelistedValues() {
+        let metadata = PublicLogMetadata(
+            result: PublicLogToken("failed"),
+            durationMilliseconds: 125,
+            byteCount: 512,
+            httpStatus: 503,
+            migrationVersion: 1,
+            count: 4,
+            errorCode: PublicLogToken("feed_unavailable")
+        )
+
+        XCTAssertEqual(
+            metadata.description,
+            "result=failed duration_ms=125 byte_count=512 http_status=503 "
+                + "migration_version=1 count=4 error_code=feed_unavailable"
+        )
+    }
 }
 
 private struct StubMenuBarContentLoader: MenuBarContentLoading {
