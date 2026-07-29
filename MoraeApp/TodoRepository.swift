@@ -168,4 +168,10 @@ final class GRDBTodoRepository: @unchecked Sendable {
             try TodoRecord(item: item).insert(database)
         }
     }
+
+    func update(_ item: TodoItem) async throws {
+        try await writer.write { database in
+            try TodoRecord(item: item).update(database)
+        }
+    }
 }

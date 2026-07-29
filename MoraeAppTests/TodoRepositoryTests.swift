@@ -56,6 +56,44 @@ final class TodoRepositoryTests: XCTestCase {
             XCTAssertEqual(error as? TodoValidationError, .titleTooLong)
         }
     }
+
+    func testUpdatePersistsTitleMetadataAndUpdatedAt() async throws {
+        let database = try AppDatabase.inMemory()
+        let repository = GRDBTodoRepository(database: database)
+        let day = try LocalDay(rawValue: "2026-07-29")
+        let original = try makeTodo(
+            title: "Original",
+            day: day,
+            sortOrder: 0
+        )
+        try await repository.insert(original)
+
+        let updatedAt = Date(unixMilliseconds: original.updatedAt.unixMilliseconds + 500)
+        let updated = try TodoItem(
+            id: original.id,
+            title: "Updated",
+            day: day,
+            status: .pending,
+            priority: .important,
+            sortOrder: 0,
+            estimatedMinutes: 90,
+            relatedURL: URL(string: "file:///tmp/result.txt"),
+            projectPath: "/tmp/project",
+            createdAt: original.createdAt,
+            updatedAt: updatedAt
+        )
+        try await repository.update(updated)
+
+        let items = try await repository.list(day: day)
+        let restored = try XCTUnwrap(items.first)
+        XCTAssertEqual(restored.title, "Updated")
+        XCTAssertEqual(restored.priority, .important)
+        XCTAssertEqual(restored.estimatedMinutes, 90)
+        XCTAssertEqual(restored.relatedURL, URL(string: "file:///tmp/result.txt"))
+        XCTAssertEqual(restored.projectPath, "/tmp/project")
+        XCTAssertEqual(restored.updatedAt, updatedAt)
+        XCTAssertEqual(restored.createdAt, original.createdAt)
+    }
 }
 
 func makeTodo(
