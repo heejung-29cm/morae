@@ -222,7 +222,17 @@ struct MenuBarRootView: View {
                 .id(draft.id)
             }
             if let deletionCandidate = viewModel.deletionCandidate {
-                inlineDeleteConfirmation(deletionCandidate)
+                InlineDeleteConfirmationView(
+                    item: deletionCandidate,
+                    onCancel: {
+                        viewModel.cancelDelete()
+                    },
+                    onDelete: {
+                        Task {
+                            await viewModel.confirmDelete()
+                        }
+                    }
+                )
             }
             if let validationMessage = viewModel.validationMessage {
                 Text(validationMessage)
@@ -231,18 +241,14 @@ struct MenuBarRootView: View {
                     .accessibilityLabel("입력 오류, \(validationMessage)")
             }
             if let deleted = viewModel.recentlyDeleted {
-                HStack {
-                    Text("‘\(deleted.title)’을 삭제했습니다.")
-                        .font(.caption)
-                    Spacer()
-                    Button("실행 취소") {
+                UndoDeleteBanner(
+                    title: deleted.title,
+                    onUndo: {
                         Task {
                             await viewModel.undoDelete()
                         }
                     }
-                }
-                .padding(8)
-                .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+                )
             }
             if let errorMessage = viewModel.errorMessage {
                 Text(errorMessage)
@@ -251,28 +257,6 @@ struct MenuBarRootView: View {
                     .accessibilityLabel("오류, \(errorMessage)")
             }
         }
-    }
-
-    private func inlineDeleteConfirmation(_ item: TodoItem) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label("‘\(item.title)’을 삭제할까요?", systemImage: "trash")
-                .font(.subheadline.weight(.semibold))
-            HStack {
-                Spacer()
-                Button("취소", role: .cancel) {
-                    viewModel.cancelDelete()
-                }
-                .keyboardShortcut(.cancelAction)
-                Button("삭제", role: .destructive) {
-                    Task {
-                        await viewModel.confirmDelete()
-                    }
-                }
-            }
-        }
-        .padding(10)
-        .background(.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
-        .accessibilityElement(children: .contain)
     }
 
     @ViewBuilder
@@ -339,9 +323,11 @@ struct MenuBarRootView: View {
                 }
             },
             onEdit: {
+                viewModel.cancelDelete()
                 editingDraft = TodoEditDraft(item: item)
             },
             onDelete: {
+                editingDraft = nil
                 viewModel.requestDelete(id: item.id)
             }
         )
@@ -449,54 +435,5 @@ struct MenuBarRootView: View {
             }
         }
         .accessibilityElement(children: .combine)
-    }
-}
-
-private struct TodoEditorView: View {
-    @State private var draft: TodoEditDraft
-    let onSave: (TodoEditDraft) async -> Void
-    let onCancel: () -> Void
-
-    init(
-        initialDraft: TodoEditDraft,
-        onSave: @escaping (TodoEditDraft) async -> Void,
-        onCancel: @escaping () -> Void
-    ) {
-        _draft = State(initialValue: initialDraft)
-        self.onSave = onSave
-        self.onCancel = onCancel
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label("할 일 편집", systemImage: "pencil")
-                .font(.subheadline.weight(.semibold))
-            TextField("제목", text: $draft.title)
-                .textFieldStyle(.roundedBorder)
-            Toggle("중요", isOn: Binding(
-                get: { draft.priority == .important },
-                set: { draft.priority = $0 ? .important : .normal }
-            ))
-            TextField("예상 시간(분)", text: $draft.estimatedMinutes)
-                .textFieldStyle(.roundedBorder)
-            TextField("관련 URL", text: $draft.relatedURL)
-                .textFieldStyle(.roundedBorder)
-            TextField("프로젝트 경로", text: $draft.projectPath)
-                .textFieldStyle(.roundedBorder)
-            HStack {
-                Spacer()
-                Button("취소", role: .cancel, action: onCancel)
-                    .keyboardShortcut(.cancelAction)
-                Button("저장") {
-                    Task {
-                        await onSave(draft)
-                    }
-                }
-                .keyboardShortcut(.defaultAction)
-            }
-        }
-        .padding(10)
-        .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
-        .accessibilityElement(children: .contain)
     }
 }
