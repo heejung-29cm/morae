@@ -153,6 +153,51 @@ final class TodoRepositoryTests: XCTestCase {
         let remaining = try await repository.list(day: day)
         XCTAssertEqual(remaining, [retained])
     }
+
+    func testReorderAssignsUniqueContiguousOrderInTransaction() async throws {
+        let database = try AppDatabase.inMemory()
+        let repository = GRDBTodoRepository(database: database)
+        let day = try LocalDay(rawValue: "2026-07-29")
+        let first = try makeTodo(title: "First", day: day, sortOrder: 4)
+        let second = try makeTodo(title: "Second", day: day, sortOrder: 4)
+        let third = try makeTodo(title: "Third", day: day, sortOrder: 9)
+        for item in [first, second, third] {
+            try await repository.insert(item)
+        }
+
+        try await repository.reorder(
+            day: day,
+            orderedIDs: [third.id, first.id, second.id]
+        )
+
+        let stored = try await repository.list(day: day)
+        XCTAssertEqual(stored.map(\.id), [third.id, first.id, second.id])
+        XCTAssertEqual(stored.map(\.sortOrder), [0, 1, 2])
+    }
+
+    func testReorderMismatchRollsBackWithoutChangingOrder() async throws {
+        let database = try AppDatabase.inMemory()
+        let repository = GRDBTodoRepository(database: database)
+        let day = try LocalDay(rawValue: "2026-07-29")
+        let first = try makeTodo(title: "First", day: day, sortOrder: 0)
+        let second = try makeTodo(title: "Second", day: day, sortOrder: 1)
+        try await repository.insert(first)
+        try await repository.insert(second)
+
+        do {
+            try await repository.reorder(
+                day: day,
+                orderedIDs: [first.id, first.id]
+            )
+            XCTFail("Expected reorderMismatch")
+        } catch {
+            XCTAssertEqual(error as? TodoRepositoryError, .reorderMismatch)
+        }
+
+        let stored = try await repository.list(day: day)
+        XCTAssertEqual(stored.map(\.id), [first.id, second.id])
+        XCTAssertEqual(stored.map(\.sortOrder), [0, 1])
+    }
 }
 
 func makeTodo(

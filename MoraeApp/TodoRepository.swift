@@ -209,4 +209,30 @@ final class GRDBTodoRepository: @unchecked Sendable {
             _ = try TodoRecord.deleteOne(database, key: id.storageValue)
         }
     }
+
+    func reorder(day: LocalDay, orderedIDs: [TodoID]) async throws {
+        try await writer.write { database in
+            let storedIDs = try String.fetchAll(
+                database,
+                sql: "SELECT id FROM tasks WHERE task_day = ?",
+                arguments: [day.rawValue]
+            )
+            let requestedIDs = orderedIDs.map(\.storageValue)
+            guard requestedIDs.count == Set(requestedIDs).count,
+                  Set(requestedIDs) == Set(storedIDs) else {
+                throw TodoRepositoryError.reorderMismatch
+            }
+
+            for (sortOrder, id) in requestedIDs.enumerated() {
+                try database.execute(
+                    sql: """
+                        UPDATE tasks
+                        SET sort_order = ?
+                        WHERE id = ? AND task_day = ?
+                        """,
+                    arguments: [sortOrder, id, day.rawValue]
+                )
+            }
+        }
+    }
 }
