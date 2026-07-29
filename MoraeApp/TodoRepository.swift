@@ -119,3 +119,53 @@ struct TodoRecord: Codable, FetchableRecord, PersistableRecord, TableRecord, Sen
         }
     }
 }
+
+final class GRDBTodoRepository: @unchecked Sendable {
+    private let writer: any DatabaseWriter
+
+    init(database: AppDatabase) {
+        writer = database.writer
+    }
+
+    func list(day: LocalDay) async throws -> [TodoItem] {
+        try await writer.read { database in
+            try TodoRecord.fetchAll(
+                database,
+                sql: """
+                    SELECT *
+                    FROM tasks
+                    WHERE task_day = ?
+                    ORDER BY
+                        CASE status WHEN 'pending' THEN 0 ELSE 1 END,
+                        sort_order ASC,
+                        created_at_ms ASC,
+                        id ASC
+                    """,
+                arguments: [day.rawValue]
+            )
+            .map { try $0.domain() }
+        }
+    }
+
+    func listCompleted(day: LocalDay) async throws -> [TodoItem] {
+        try await writer.read { database in
+            try TodoRecord.fetchAll(
+                database,
+                sql: """
+                    SELECT *
+                    FROM tasks
+                    WHERE task_day = ? AND status = ?
+                    ORDER BY sort_order ASC, created_at_ms ASC, id ASC
+                    """,
+                arguments: [day.rawValue, TodoStatus.completed.rawValue]
+            )
+            .map { try $0.domain() }
+        }
+    }
+
+    func insert(_ item: TodoItem) async throws {
+        try await writer.write { database in
+            try TodoRecord(item: item).insert(database)
+        }
+    }
+}
