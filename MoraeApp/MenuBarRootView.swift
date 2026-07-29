@@ -193,11 +193,16 @@ struct MenuBarRootView: View {
                         viewModel.clearValidationMessage()
                     }
                     .accessibilityLabel("빠른 할 일 추가")
+                    .onChange(of: quickAddTitle) {
+                        viewModel.clearValidationMessage()
+                    }
                 Button {
                     submitQuickAdd()
                 } label: {
                     Image(systemName: "plus")
                 }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
                 .accessibilityLabel("할 일 저장")
             }
             if viewModel.todayTodos.isEmpty {
@@ -235,10 +240,11 @@ struct MenuBarRootView: View {
                 )
             }
             if let validationMessage = viewModel.validationMessage {
-                Text(validationMessage)
-                    .font(.caption)
-                    .foregroundStyle(.red)
-                    .accessibilityLabel("입력 오류, \(validationMessage)")
+                MenuBarStateView(
+                    kind: .validation,
+                    title: "입력을 확인해 주세요",
+                    message: validationMessage
+                )
             }
             if let deleted = viewModel.recentlyDeleted {
                 UndoDeleteBanner(
@@ -251,10 +257,11 @@ struct MenuBarRootView: View {
                 )
             }
             if let errorMessage = viewModel.errorMessage {
-                Text(errorMessage)
-                    .font(.caption)
-                    .foregroundStyle(.red)
-                    .accessibilityLabel("오류, \(errorMessage)")
+                MenuBarStateView(
+                    kind: .error,
+                    title: "작업을 완료하지 못했습니다",
+                    message: errorMessage
+                )
             }
         }
     }
@@ -415,25 +422,22 @@ struct MenuBarRootView: View {
     }
 
     private func emptyMessage(for section: MenuBarSection) -> some View {
-        Text(section.emptyMessage)
-            .font(.subheadline)
-            .foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(12)
-            .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
-            .accessibilityLabel("\(section.title), \(section.emptyMessage)")
+        MenuBarStateView(
+            kind: .empty,
+            message: section.emptyMessage,
+            systemImage: section.systemImage
+        )
+        .accessibilityLabel(
+            "\(section.title), \(section.emptyMessage)"
+        )
     }
 
     private func startupErrorView(_ error: AppError) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label("로컬 데이터 열기 실패", systemImage: "exclamationmark.triangle")
-                .font(.headline)
-            Text(error.userMessage)
-            if let recovery = error.recovery {
-                Text(recovery)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .accessibilityElement(children: .combine)
+        MenuBarStateView(
+            kind: .error,
+            title: "로컬 데이터 열기 실패",
+            message: error.userMessage,
+            recovery: error.recovery
+        )
     }
 }
