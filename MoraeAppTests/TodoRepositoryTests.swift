@@ -415,6 +415,95 @@ final class TodoRepositoryTests: XCTestCase {
         let originals = try await repository.list(day: viewModel.yesterday)
         XCTAssertEqual(originals.map(\.id), [yesterdayPending.id])
     }
+
+    func testSprintOneDemoPersistsAndRollsCompletedIntoYesterday() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: root,
+            withIntermediateDirectories: true
+        )
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let databaseURL = root.appendingPathComponent("morae.sqlite")
+        let dayOne = try LocalDay(rawValue: "2026-07-29")
+        let dayTwo = try LocalDay(rawValue: "2026-07-30")
+        let first = try makeTodo(
+            title: "Plan demo",
+            day: dayOne,
+            sortOrder: 0
+        )
+        let completed = try makeTodo(
+            title: "Complete demo",
+            day: dayOne,
+            sortOrder: 1
+        )
+        let deleted = try makeTodo(
+            title: "Delete demo",
+            day: dayOne,
+            sortOrder: 2
+        )
+
+        do {
+            let database = try AppDatabase.open(at: databaseURL)
+            let repository = GRDBTodoRepository(database: database)
+            for item in [first, completed, deleted] {
+                try await repository.insert(item)
+            }
+            let edited = try TodoItem(
+                id: first.id,
+                title: "Edited demo",
+                day: dayOne,
+                status: .pending,
+                priority: .important,
+                sortOrder: first.sortOrder,
+                estimatedMinutes: 25,
+                createdAt: first.createdAt,
+                updatedAt: Date(unixMilliseconds: 1_775_039_500_000)
+            )
+            try await repository.update(edited)
+            try await repository.reorder(
+                day: dayOne,
+                orderedIDs: [completed.id, first.id, deleted.id]
+            )
+            _ = try await repository.setCompletion(
+                id: completed.id,
+                isCompleted: true,
+                at: Date(unixMilliseconds: 1_775_039_600_000)
+            )
+            try await repository.delete(id: deleted.id)
+        }
+
+        let reopenedDatabase = try AppDatabase.open(at: databaseURL)
+        let reopenedRepository = GRDBTodoRepository(database: reopenedDatabase)
+        let persisted = try await reopenedRepository.list(day: dayOne)
+        XCTAssertEqual(persisted.map(\.id), [first.id, completed.id])
+        XCTAssertEqual(persisted.first?.title, "Edited demo")
+        XCTAssertEqual(persisted.first?.priority, .important)
+        XCTAssertEqual(persisted.first?.estimatedMinutes, 25)
+        XCTAssertEqual(persisted.last?.status, .completed)
+
+        let persistedSortOrder = try reopenedDatabase.read { database in
+            try String.fetchAll(
+                database,
+                sql: "SELECT id FROM tasks WHERE task_day = ? ORDER BY sort_order",
+                arguments: [dayOne.rawValue]
+            )
+        }
+        XCTAssertEqual(
+            persistedSortOrder,
+            [completed.id.storageValue, first.id.storageValue]
+        )
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Asia/Seoul")!
+        let nextDaySummary = try await BuildLocalTaskSummary(
+            repository: reopenedRepository
+        )
+        .execute(today: dayTwo, calendar: calendar)
+        XCTAssertEqual(nextDaySummary.yesterdayCompleted.map(\.id), [completed.id])
+        XCTAssertTrue(nextDaySummary.todayPending.isEmpty)
+    }
 }
 
 func makeTodo(
