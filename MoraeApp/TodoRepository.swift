@@ -11,6 +11,13 @@ protocol TodoRepository: Sendable {
     func delete(id: TodoID) async throws
     func reorder(day: LocalDay, orderedIDs: [TodoID]) async throws
     func carryOverPending(from: LocalDay, to: LocalDay) async throws
+    func carryOverPending(
+        from: LocalDay,
+        to: LocalDay,
+        selectedIDs: [TodoID],
+        newIDs: [TodoID],
+        at: Date
+    ) async throws -> [TodoItem]
 }
 
 enum TodoMappingError: Error, Equatable, Sendable {
@@ -235,4 +242,84 @@ final class GRDBTodoRepository: @unchecked Sendable {
             }
         }
     }
+
+    func carryOverPending(from: LocalDay, to: LocalDay) async throws {
+        let pending = try await list(day: from).filter { $0.status == .pending }
+        _ = try await carryOverPending(
+            from: from,
+            to: to,
+            selectedIDs: pending.map(\.id),
+            newIDs: pending.map { _ in TodoID(rawValue: UUID()) },
+            at: Date()
+        )
+    }
+
+    func carryOverPending(
+        from: LocalDay,
+        to: LocalDay,
+        selectedIDs: [TodoID],
+        newIDs: [TodoID],
+        at date: Date
+    ) async throws -> [TodoItem] {
+        guard selectedIDs.count == Set(selectedIDs).count,
+              selectedIDs.count == newIDs.count,
+              newIDs.count == Set(newIDs).count else {
+            throw TodoRepositoryError.reorderMismatch
+        }
+        guard !selectedIDs.isEmpty else {
+            return []
+        }
+
+        return try await writer.write { database in
+            let records = try TodoRecord.fetchAll(
+                database,
+                sql: """
+                    SELECT *
+                    FROM tasks
+                    WHERE task_day = ? AND status = 'pending'
+                    ORDER BY sort_order ASC, created_at_ms ASC, id ASC
+                    """,
+                arguments: [from.rawValue]
+            )
+            let recordsByID = Dictionary(
+                uniqueKeysWithValues: records.map { ($0.id, $0) }
+            )
+            let requestedStorageIDs = selectedIDs.map(\.storageValue)
+            guard requestedStorageIDs.allSatisfy({ recordsByID[$0] != nil }) else {
+                throw TodoRepositoryError.reorderMismatch
+            }
+
+            let nextSortOrder = (
+                try Int.fetchOne(
+                    database,
+                    sql: "SELECT MAX(sort_order) FROM tasks WHERE task_day = ?",
+                    arguments: [to.rawValue]
+                ) ?? -1
+            ) + 1
+
+            return try zip(requestedStorageIDs, newIDs)
+                .enumerated()
+                .map { offset, pair in
+                    let (sourceID, newID) = pair
+                    let source = try recordsByID[sourceID]!.domain()
+                    let copy = try TodoItem(
+                        id: newID,
+                        title: source.title,
+                        day: to,
+                        status: .pending,
+                        priority: source.priority,
+                        sortOrder: nextSortOrder + offset,
+                        estimatedMinutes: source.estimatedMinutes,
+                        relatedURL: source.relatedURL,
+                        projectPath: source.projectPath,
+                        createdAt: date,
+                        updatedAt: date
+                    )
+                    try TodoRecord(item: copy).insert(database)
+                    return copy
+                }
+        }
+    }
 }
+
+extension GRDBTodoRepository: TodoRepository {}

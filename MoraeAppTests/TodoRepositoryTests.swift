@@ -198,6 +198,59 @@ final class TodoRepositoryTests: XCTestCase {
         XCTAssertEqual(stored.map(\.id), [first.id, second.id])
         XCTAssertEqual(stored.map(\.sortOrder), [0, 1])
     }
+
+    func testCarryOverCopiesSelectedPendingOnceWithoutChangingOriginals() async throws {
+        let database = try AppDatabase.inMemory()
+        let repository = GRDBTodoRepository(database: database)
+        let yesterday = try LocalDay(rawValue: "2026-07-29")
+        let today = try LocalDay(rawValue: "2026-07-30")
+        let selected = try makeTodo(
+            title: "Selected",
+            day: yesterday,
+            priority: .important,
+            sortOrder: 0,
+            estimatedMinutes: 30
+        )
+        let unselected = try makeTodo(
+            title: "Unselected",
+            day: yesterday,
+            sortOrder: 1
+        )
+        let completed = try makeTodo(
+            title: "Completed",
+            day: yesterday,
+            status: .completed,
+            sortOrder: 2
+        )
+        for item in [selected, unselected, completed] {
+            try await repository.insert(item)
+        }
+
+        let newID = TodoID(
+            rawValue: UUID(uuidString: "AD48D4DB-8B28-4BF0-99D2-899B65D73DB2")!
+        )
+        let instant = Date(unixMilliseconds: 1_775_040_000_000)
+        let useCase = CarryOverPendingTodos(
+            repository: repository,
+            clock: FixedClock(instant: instant),
+            uuidGenerator: FixedUUIDGenerator(uuid: newID.rawValue)
+        )
+        let copies = try await useCase.execute(
+            from: yesterday,
+            to: today,
+            selectedIDs: [selected.id]
+        )
+
+        XCTAssertEqual(copies.map(\.id), [newID])
+        XCTAssertEqual(copies.map(\.title), ["Selected"])
+        XCTAssertEqual(copies.first?.day, today)
+        XCTAssertEqual(copies.first?.status, .pending)
+        XCTAssertNil(copies.first?.completedAt)
+        let originals = try await repository.list(day: yesterday)
+        let todayItems = try await repository.list(day: today)
+        XCTAssertEqual(originals.count, 3)
+        XCTAssertEqual(todayItems, copies)
+    }
 }
 
 func makeTodo(
