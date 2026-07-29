@@ -230,6 +230,64 @@ final class MoraeAppTests: XCTestCase {
         XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
         XCTAssertEqual(data, fixture)
     }
+
+    func testTodoRecordRoundTripsEveryNullableField() throws {
+        let completedAt = Date(unixMilliseconds: 1_775_039_400_000)
+        let item = try TodoItem(
+            id: TodoID(
+                rawValue: UUID(uuidString: "BF1752FD-9756-41A5-A864-C9EAB8E9680E")!
+            ),
+            title: "  Ship Sprint 1  ",
+            day: LocalDay(rawValue: "2026-07-29"),
+            status: .completed,
+            priority: .important,
+            sortOrder: 3,
+            estimatedMinutes: 45,
+            relatedURL: URL(string: "https://example.com/task"),
+            projectPath: "/tmp/morae",
+            completedAt: completedAt,
+            createdAt: Date(unixMilliseconds: 1_775_039_000_000),
+            updatedAt: completedAt
+        )
+
+        let restored = try TodoRecord(item: item).domain()
+
+        XCTAssertEqual(restored.title, "Ship Sprint 1")
+        XCTAssertEqual(restored, item)
+    }
+
+    func testTodoRecordRejectsInvalidEnumValueExplicitly() throws {
+        let database = try AppDatabase.inMemory()
+        try database.writer.write { db in
+            try db.execute(sql: "PRAGMA ignore_check_constraints = ON")
+            try db.execute(
+                sql: """
+                    INSERT INTO tasks (
+                        id, title, task_day, status, priority, sort_order,
+                        created_at_ms, updated_at_ms
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                arguments: [
+                    UUID().uuidString.lowercased(),
+                    "Bad status",
+                    "2026-07-29",
+                    "unknown",
+                    0,
+                    0,
+                    1,
+                    1,
+                ]
+            )
+        }
+
+        let record = try database.read { db in
+            try TodoRecord.fetchOne(db)!
+        }
+
+        XCTAssertThrowsError(try record.domain()) { error in
+            XCTAssertEqual(error as? TodoMappingError, .invalidStatus("unknown"))
+        }
+    }
 }
 
 private struct StubMenuBarContentLoader: MenuBarContentLoading {

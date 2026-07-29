@@ -1,0 +1,121 @@
+import Foundation
+import GRDB
+import MoraeCore
+
+protocol TodoRepository: Sendable {
+    func list(day: LocalDay) async throws -> [TodoItem]
+    func listCompleted(day: LocalDay) async throws -> [TodoItem]
+    func insert(_ item: TodoItem) async throws
+    func update(_ item: TodoItem) async throws
+    func delete(id: TodoID) async throws
+    func reorder(day: LocalDay, orderedIDs: [TodoID]) async throws
+    func carryOverPending(from: LocalDay, to: LocalDay) async throws
+}
+
+enum TodoMappingError: Error, Equatable, Sendable {
+    case invalidID(String)
+    case invalidDay(String)
+    case invalidStatus(String)
+    case invalidPriority(Int)
+    case invalidURL(String)
+    case invalidDomainValue(TodoValidationError)
+}
+
+struct TodoRecord: Codable, FetchableRecord, PersistableRecord, TableRecord, Sendable {
+    static let databaseTableName = "tasks"
+
+    let id: String
+    var title: String
+    var taskDay: String
+    var status: String
+    var priority: Int
+    var sortOrder: Int
+    var estimatedMinutes: Int?
+    var relatedURL: String?
+    var projectPath: String?
+    var source: String
+    var completedAtMs: Int64?
+    let createdAtMs: Int64
+    var updatedAtMs: Int64
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case title
+        case taskDay = "task_day"
+        case status
+        case priority
+        case sortOrder = "sort_order"
+        case estimatedMinutes = "estimated_minutes"
+        case relatedURL = "related_url"
+        case projectPath = "project_path"
+        case source
+        case completedAtMs = "completed_at_ms"
+        case createdAtMs = "created_at_ms"
+        case updatedAtMs = "updated_at_ms"
+    }
+
+    init(item: TodoItem) {
+        id = item.id.storageValue
+        title = item.title
+        taskDay = item.day.rawValue
+        status = item.status.rawValue
+        priority = item.priority.rawValue
+        sortOrder = item.sortOrder
+        estimatedMinutes = item.estimatedMinutes
+        relatedURL = item.relatedURL?.absoluteString
+        projectPath = item.projectPath
+        source = "manual"
+        completedAtMs = item.completedAt?.unixMilliseconds
+        createdAtMs = item.createdAt.unixMilliseconds
+        updatedAtMs = item.updatedAt.unixMilliseconds
+    }
+
+    func domain() throws -> TodoItem {
+        guard let rawID = UUID(uuidString: id) else {
+            throw TodoMappingError.invalidID(id)
+        }
+
+        let day: LocalDay
+        do {
+            day = try LocalDay(rawValue: taskDay)
+        } catch {
+            throw TodoMappingError.invalidDay(taskDay)
+        }
+
+        guard let domainStatus = TodoStatus(rawValue: status) else {
+            throw TodoMappingError.invalidStatus(status)
+        }
+        guard let domainPriority = TodoPriority(rawValue: priority) else {
+            throw TodoMappingError.invalidPriority(priority)
+        }
+
+        let domainURL: URL?
+        if let relatedURL {
+            guard let parsedURL = URL(string: relatedURL) else {
+                throw TodoMappingError.invalidURL(relatedURL)
+            }
+            domainURL = parsedURL
+        } else {
+            domainURL = nil
+        }
+
+        do {
+            return try TodoItem(
+                id: TodoID(rawValue: rawID),
+                title: title,
+                day: day,
+                status: domainStatus,
+                priority: domainPriority,
+                sortOrder: sortOrder,
+                estimatedMinutes: estimatedMinutes,
+                relatedURL: domainURL,
+                projectPath: projectPath,
+                completedAt: completedAtMs.map(Date.init(unixMilliseconds:)),
+                createdAt: Date(unixMilliseconds: createdAtMs),
+                updatedAt: Date(unixMilliseconds: updatedAtMs)
+            )
+        } catch let error as TodoValidationError {
+            throw TodoMappingError.invalidDomainValue(error)
+        }
+    }
+}
