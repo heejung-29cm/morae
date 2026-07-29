@@ -183,6 +183,53 @@ final class MoraeAppTests: XCTestCase {
             }
         )
     }
+
+    func testSharedClockUUIDDatabaseAndFixtureSupport() throws {
+        let instant = Date(unixMilliseconds: 1_775_039_400_123)
+        let uuid = UUID(uuidString: "8E5BC6BE-5197-4392-A7D9-780D3EB58033")!
+        let temporaryDatabase = try TemporaryDatabase()
+
+        XCTAssertEqual(FixedClock(instant: instant).now(), instant)
+        XCTAssertEqual(FixedUUIDGenerator(uuid: uuid).next(), uuid)
+        XCTAssertTrue(
+            FileManager.default.fileExists(
+                atPath: temporaryDatabase.rootURL
+                    .appendingPathComponent("morae.sqlite")
+                    .path
+            )
+        )
+        XCTAssertEqual(
+            try FixtureLoader.data(named: "sample-response", extension: "json"),
+            Data("{\n  \"status\": \"ok\"\n}\n".utf8)
+        )
+    }
+
+    func testStubURLProtocolReturnsRegisteredResponse() async throws {
+        let fixture = try FixtureLoader.data(
+            named: "sample-response",
+            extension: "json"
+        )
+        StubURLProtocol.register { request in
+            let response = HTTPURLResponse(
+                url: request.url!,
+                statusCode: 200,
+                httpVersion: "HTTP/1.1",
+                headerFields: ["Content-Type": "application/json"]
+            )!
+            return (response, fixture)
+        }
+        defer { StubURLProtocol.reset() }
+
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [StubURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+        let (data, response) = try await session.data(
+            for: URLRequest(url: URL(string: "https://fixture.invalid/data")!)
+        )
+
+        XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
+        XCTAssertEqual(data, fixture)
+    }
 }
 
 private struct StubMenuBarContentLoader: MenuBarContentLoading {

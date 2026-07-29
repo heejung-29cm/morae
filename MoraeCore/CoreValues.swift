@@ -82,6 +82,18 @@ public struct SystemClock: Clock {
     }
 }
 
+public protocol UUIDGenerating: Sendable {
+    func next() -> UUID
+}
+
+public struct SystemUUIDGenerator: UUIDGenerating {
+    public init() {}
+
+    public func next() -> UUID {
+        UUID()
+    }
+}
+
 public extension Date {
     var unixMilliseconds: Int64 {
         Int64((timeIntervalSince1970 * 1_000).rounded(.towardZero))

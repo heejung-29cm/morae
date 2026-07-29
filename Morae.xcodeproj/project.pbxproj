@@ -27,6 +27,8 @@
 		200000000000000000000002 /* AppContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000002 /* AppContainer.swift */; };
 		200000000000000000000003 /* Logging.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000003 /* Logging.swift */; };
 		200000000000000000000004 /* AppDatabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000004 /* AppDatabase.swift */; };
+		200000000000000000000005 /* TestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000005 /* TestSupport.swift */; };
+		200000000000000000000006 /* sample-response.json in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000006 /* sample-response.json */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -50,6 +52,8 @@
 		100000000000000000000002 /* AppContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppContainer.swift; sourceTree = "<group>"; };
 		100000000000000000000003 /* Logging.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Logging.swift; sourceTree = "<group>"; };
 		100000000000000000000004 /* AppDatabase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDatabase.swift; sourceTree = "<group>"; };
+		100000000000000000000005 /* TestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestSupport.swift; sourceTree = "<group>"; };
+		100000000000000000000006 /* sample-response.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "sample-response.json"; sourceTree = "<group>"; };
 		000000000000000000000020 /* libMoraeCore.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libMoraeCore.a; sourceTree = BUILT_PRODUCTS_DIR; };
 		000000000000000000000021 /* Morae.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Morae.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		000000000000000000000022 /* hamster-event */ = {isa = PBXFileReference; explicitFileType = compiled.mach-o.executable; includeInIndex = 0; path = "hamster-event"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -78,6 +82,7 @@
 				000000000000000000000007 /* MoraeCoreTests */,
 				000000000000000000000008 /* MoraeAppTests */,
 				000000000000000000000009 /* HamsterEventCLITests */,
+				100000000000000000000007 /* TestFixtures */,
 				00000000000000000000000A /* Frameworks */,
 				000000000000000000000003 /* Products */,
 			);
@@ -88,9 +93,10 @@
 		000000000000000000000005 /* MoraeApp */ = {isa = PBXGroup; children = (000000000000000000000011 /* MoraeApp.swift */, 000000000000000000000016 /* AppDataDirectory.swift */, 100000000000000000000002 /* AppContainer.swift */, 100000000000000000000003 /* Logging.swift */, 100000000000000000000004 /* AppDatabase.swift */,); path = MoraeApp; sourceTree = "<group>"; };
 		000000000000000000000006 /* HamsterEventCLI */ = {isa = PBXGroup; children = (000000000000000000000012 /* main.swift */,); path = HamsterEventCLI; sourceTree = "<group>"; };
 		000000000000000000000007 /* MoraeCoreTests */ = {isa = PBXGroup; children = (000000000000000000000013 /* MoraeCoreTests.swift */,); path = MoraeCoreTests; sourceTree = "<group>"; };
-		000000000000000000000008 /* MoraeAppTests */ = {isa = PBXGroup; children = (000000000000000000000014 /* MoraeAppTests.swift */,); path = MoraeAppTests; sourceTree = "<group>"; };
+		000000000000000000000008 /* MoraeAppTests */ = {isa = PBXGroup; children = (000000000000000000000014 /* MoraeAppTests.swift */, 100000000000000000000005 /* TestSupport.swift */,); path = MoraeAppTests; sourceTree = "<group>"; };
 		000000000000000000000009 /* HamsterEventCLITests */ = {isa = PBXGroup; children = (000000000000000000000015 /* HamsterEventCLITests.swift */,); path = HamsterEventCLITests; sourceTree = "<group>"; };
 		00000000000000000000000A /* Frameworks */ = {isa = PBXGroup; children = (000000000000000000000026 /* XCTest.framework */,); name = Frameworks; sourceTree = "<group>"; };
+		100000000000000000000007 /* TestFixtures */ = {isa = PBXGroup; children = (100000000000000000000006 /* sample-response.json */,); path = TestFixtures; sourceTree = "<group>"; };
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -145,7 +151,7 @@
 		000000000000000000000044 /* MoraeAppTests */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 0000000000000000000000E5 /* Build configuration list for PBXNativeTarget "MoraeAppTests" */;
-			buildPhases = (00000000000000000000005A /* Sources */, 00000000000000000000005B /* Frameworks */,);
+			buildPhases = (00000000000000000000005A /* Sources */, 00000000000000000000005B /* Frameworks */, 300000000000000000000001 /* Resources */,);
 			buildRules = ();
 			dependencies = (0000000000000000000000D3 /* PBXTargetDependency */,);
 			name = MoraeAppTests;
@@ -201,6 +207,7 @@
 
 /* Begin PBXResourcesBuildPhase section */
 		000000000000000000000055 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		300000000000000000000001 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (200000000000000000000006 /* sample-response.json in Resources */,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -208,7 +215,7 @@
 		000000000000000000000053 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (000000000000000000000031 /* MoraeApp.swift in Sources */, 00000000000000000000003C /* AppDataDirectory.swift in Sources */, 200000000000000000000002 /* AppContainer.swift in Sources */, 200000000000000000000003 /* Logging.swift in Sources */, 200000000000000000000004 /* AppDatabase.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
 		000000000000000000000056 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (000000000000000000000032 /* main.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
 		000000000000000000000058 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (000000000000000000000033 /* MoraeCoreTests.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
-		00000000000000000000005A /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (000000000000000000000034 /* MoraeAppTests.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
+		00000000000000000000005A /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (000000000000000000000034 /* MoraeAppTests.swift in Sources */, 200000000000000000000005 /* TestSupport.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
 		00000000000000000000005C /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (000000000000000000000035 /* HamsterEventCLITests.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
