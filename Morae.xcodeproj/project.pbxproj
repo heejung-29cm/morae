@@ -1,0 +1,229 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 60;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		000000000000000000000030 /* MoraeCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000010 /* MoraeCore.swift */; };
+		000000000000000000000031 /* MoraeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000011 /* MoraeApp.swift */; };
+		000000000000000000000032 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000012 /* main.swift */; };
+		000000000000000000000033 /* MoraeCoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000013 /* MoraeCoreTests.swift */; };
+		000000000000000000000034 /* MoraeAppTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000014 /* MoraeAppTests.swift */; };
+		000000000000000000000035 /* HamsterEventCLITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000015 /* HamsterEventCLITests.swift */; };
+		000000000000000000000036 /* libMoraeCore.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 000000000000000000000020 /* libMoraeCore.a */; };
+		000000000000000000000037 /* libMoraeCore.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 000000000000000000000020 /* libMoraeCore.a */; };
+		000000000000000000000038 /* XCTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 000000000000000000000026 /* XCTest.framework */; };
+		000000000000000000000039 /* XCTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 000000000000000000000026 /* XCTest.framework */; };
+		00000000000000000000003A /* XCTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 000000000000000000000026 /* XCTest.framework */; };
+		00000000000000000000003B /* libMoraeCore.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 000000000000000000000020 /* libMoraeCore.a */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		0000000000000000000000C0 /* PBXContainerItemProxy */ = {isa = PBXContainerItemProxy; containerPortal = 000000000000000000000001 /* Project object */; proxyType = 1; remoteGlobalIDString = 000000000000000000000040; remoteInfo = MoraeCore; };
+		0000000000000000000000C1 /* PBXContainerItemProxy */ = {isa = PBXContainerItemProxy; containerPortal = 000000000000000000000001 /* Project object */; proxyType = 1; remoteGlobalIDString = 000000000000000000000040; remoteInfo = MoraeCore; };
+		0000000000000000000000C2 /* PBXContainerItemProxy */ = {isa = PBXContainerItemProxy; containerPortal = 000000000000000000000001 /* Project object */; proxyType = 1; remoteGlobalIDString = 000000000000000000000040; remoteInfo = MoraeCore; };
+		0000000000000000000000C3 /* PBXContainerItemProxy */ = {isa = PBXContainerItemProxy; containerPortal = 000000000000000000000001 /* Project object */; proxyType = 1; remoteGlobalIDString = 000000000000000000000041; remoteInfo = MoraeApp; };
+		0000000000000000000000C4 /* PBXContainerItemProxy */ = {isa = PBXContainerItemProxy; containerPortal = 000000000000000000000001 /* Project object */; proxyType = 1; remoteGlobalIDString = 000000000000000000000042; remoteInfo = HamsterEventCLI; };
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		000000000000000000000010 /* MoraeCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoraeCore.swift; sourceTree = "<group>"; };
+		000000000000000000000011 /* MoraeApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoraeApp.swift; sourceTree = "<group>"; };
+		000000000000000000000012 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
+		000000000000000000000013 /* MoraeCoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoraeCoreTests.swift; sourceTree = "<group>"; };
+		000000000000000000000014 /* MoraeAppTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoraeAppTests.swift; sourceTree = "<group>"; };
+		000000000000000000000015 /* HamsterEventCLITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HamsterEventCLITests.swift; sourceTree = "<group>"; };
+		000000000000000000000020 /* libMoraeCore.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libMoraeCore.a; sourceTree = BUILT_PRODUCTS_DIR; };
+		000000000000000000000021 /* Morae.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Morae.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		000000000000000000000022 /* hamster-event */ = {isa = PBXFileReference; explicitFileType = compiled.mach-o.executable; includeInIndex = 0; path = "hamster-event"; sourceTree = BUILT_PRODUCTS_DIR; };
+		000000000000000000000023 /* MoraeCoreTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MoraeCoreTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		000000000000000000000024 /* MoraeAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MoraeAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		000000000000000000000025 /* HamsterEventCLITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HamsterEventCLITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		000000000000000000000026 /* XCTest.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = XCTest.framework; path = System/Library/Frameworks/XCTest.framework; sourceTree = SDKROOT; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		000000000000000000000051 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		000000000000000000000054 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (00000000000000000000003B /* libMoraeCore.a in Frameworks */,); runOnlyForDeploymentPostprocessing = 0; };
+		000000000000000000000057 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (000000000000000000000036 /* libMoraeCore.a in Frameworks */,); runOnlyForDeploymentPostprocessing = 0; };
+		000000000000000000000059 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (000000000000000000000037 /* libMoraeCore.a in Frameworks */, 000000000000000000000038 /* XCTest.framework in Frameworks */,); runOnlyForDeploymentPostprocessing = 0; };
+		00000000000000000000005B /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (000000000000000000000039 /* XCTest.framework in Frameworks */,); runOnlyForDeploymentPostprocessing = 0; };
+		00000000000000000000005D /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (00000000000000000000003A /* XCTest.framework in Frameworks */,); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		000000000000000000000002 = {
+			isa = PBXGroup;
+			children = (
+				000000000000000000000004 /* MoraeCore */,
+				000000000000000000000005 /* MoraeApp */,
+				000000000000000000000006 /* HamsterEventCLI */,
+				000000000000000000000007 /* MoraeCoreTests */,
+				000000000000000000000008 /* MoraeAppTests */,
+				000000000000000000000009 /* HamsterEventCLITests */,
+				00000000000000000000000A /* Frameworks */,
+				000000000000000000000003 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		000000000000000000000003 /* Products */ = {isa = PBXGroup; children = (000000000000000000000020 /* libMoraeCore.a */, 000000000000000000000021 /* Morae.app */, 000000000000000000000022 /* hamster-event */, 000000000000000000000023 /* MoraeCoreTests.xctest */, 000000000000000000000024 /* MoraeAppTests.xctest */, 000000000000000000000025 /* HamsterEventCLITests.xctest */,); name = Products; sourceTree = "<group>"; };
+		000000000000000000000004 /* MoraeCore */ = {isa = PBXGroup; children = (000000000000000000000010 /* MoraeCore.swift */,); path = MoraeCore; sourceTree = "<group>"; };
+		000000000000000000000005 /* MoraeApp */ = {isa = PBXGroup; children = (000000000000000000000011 /* MoraeApp.swift */,); path = MoraeApp; sourceTree = "<group>"; };
+		000000000000000000000006 /* HamsterEventCLI */ = {isa = PBXGroup; children = (000000000000000000000012 /* main.swift */,); path = HamsterEventCLI; sourceTree = "<group>"; };
+		000000000000000000000007 /* MoraeCoreTests */ = {isa = PBXGroup; children = (000000000000000000000013 /* MoraeCoreTests.swift */,); path = MoraeCoreTests; sourceTree = "<group>"; };
+		000000000000000000000008 /* MoraeAppTests */ = {isa = PBXGroup; children = (000000000000000000000014 /* MoraeAppTests.swift */,); path = MoraeAppTests; sourceTree = "<group>"; };
+		000000000000000000000009 /* HamsterEventCLITests */ = {isa = PBXGroup; children = (000000000000000000000015 /* HamsterEventCLITests.swift */,); path = HamsterEventCLITests; sourceTree = "<group>"; };
+		00000000000000000000000A /* Frameworks */ = {isa = PBXGroup; children = (000000000000000000000026 /* XCTest.framework */,); name = Frameworks; sourceTree = "<group>"; };
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		000000000000000000000040 /* MoraeCore */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0000000000000000000000E1 /* Build configuration list for PBXNativeTarget "MoraeCore" */;
+			buildPhases = (000000000000000000000050 /* Sources */, 000000000000000000000051 /* Frameworks */,);
+			buildRules = ();
+			dependencies = ();
+			name = MoraeCore;
+			productName = MoraeCore;
+			productReference = 000000000000000000000020 /* libMoraeCore.a */;
+			productType = "com.apple.product-type.library.static";
+		};
+		000000000000000000000041 /* MoraeApp */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0000000000000000000000E2 /* Build configuration list for PBXNativeTarget "MoraeApp" */;
+			buildPhases = (000000000000000000000053 /* Sources */, 000000000000000000000054 /* Frameworks */, 000000000000000000000055 /* Resources */,);
+			buildRules = ();
+			dependencies = (0000000000000000000000D0 /* PBXTargetDependency */,);
+			name = MoraeApp;
+			productName = Morae;
+			productReference = 000000000000000000000021 /* Morae.app */;
+			productType = "com.apple.product-type.application";
+		};
+		000000000000000000000042 /* HamsterEventCLI */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0000000000000000000000E3 /* Build configuration list for PBXNativeTarget "HamsterEventCLI" */;
+			buildPhases = (000000000000000000000056 /* Sources */, 000000000000000000000057 /* Frameworks */,);
+			buildRules = ();
+			dependencies = (0000000000000000000000D1 /* PBXTargetDependency */,);
+			name = HamsterEventCLI;
+			productName = "hamster-event";
+			productReference = 000000000000000000000022 /* hamster-event */;
+			productType = "com.apple.product-type.tool";
+		};
+		000000000000000000000043 /* MoraeCoreTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0000000000000000000000E4 /* Build configuration list for PBXNativeTarget "MoraeCoreTests" */;
+			buildPhases = (000000000000000000000058 /* Sources */, 000000000000000000000059 /* Frameworks */,);
+			buildRules = ();
+			dependencies = (0000000000000000000000D2 /* PBXTargetDependency */,);
+			name = MoraeCoreTests;
+			productName = MoraeCoreTests;
+			productReference = 000000000000000000000023 /* MoraeCoreTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		000000000000000000000044 /* MoraeAppTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0000000000000000000000E5 /* Build configuration list for PBXNativeTarget "MoraeAppTests" */;
+			buildPhases = (00000000000000000000005A /* Sources */, 00000000000000000000005B /* Frameworks */,);
+			buildRules = ();
+			dependencies = (0000000000000000000000D3 /* PBXTargetDependency */,);
+			name = MoraeAppTests;
+			productName = MoraeAppTests;
+			productReference = 000000000000000000000024 /* MoraeAppTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		000000000000000000000045 /* HamsterEventCLITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0000000000000000000000E6 /* Build configuration list for PBXNativeTarget "HamsterEventCLITests" */;
+			buildPhases = (00000000000000000000005C /* Sources */, 00000000000000000000005D /* Frameworks */,);
+			buildRules = ();
+			dependencies = (0000000000000000000000D4 /* PBXTargetDependency */,);
+			name = HamsterEventCLITests;
+			productName = HamsterEventCLITests;
+			productReference = 000000000000000000000025 /* HamsterEventCLITests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		000000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2600;
+				LastUpgradeCheck = 2600;
+				TargetAttributes = {
+					000000000000000000000040 = {CreatedOnToolsVersion = 26.0;};
+					000000000000000000000041 = {CreatedOnToolsVersion = 26.0;};
+					000000000000000000000042 = {CreatedOnToolsVersion = 26.0;};
+					000000000000000000000043 = {CreatedOnToolsVersion = 26.0; TestTargetID = 000000000000000000000040;};
+					000000000000000000000044 = {CreatedOnToolsVersion = 26.0; TestTargetID = 000000000000000000000041;};
+					000000000000000000000045 = {CreatedOnToolsVersion = 26.0; TestTargetID = 000000000000000000000042;};
+				};
+			};
+			buildConfigurationList = 0000000000000000000000E0 /* Build configuration list for PBXProject "Morae" */;
+			compatibilityVersion = "Xcode 15.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (en, Base,);
+			mainGroup = 000000000000000000000002;
+			productRefGroup = 000000000000000000000003 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (000000000000000000000041 /* MoraeApp */, 000000000000000000000042 /* HamsterEventCLI */, 000000000000000000000040 /* MoraeCore */, 000000000000000000000044 /* MoraeAppTests */, 000000000000000000000045 /* HamsterEventCLITests */, 000000000000000000000043 /* MoraeCoreTests */,);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		000000000000000000000055 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		000000000000000000000050 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (000000000000000000000030 /* MoraeCore.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
+		000000000000000000000053 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (000000000000000000000031 /* MoraeApp.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
+		000000000000000000000056 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (000000000000000000000032 /* main.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
+		000000000000000000000058 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (000000000000000000000033 /* MoraeCoreTests.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
+		00000000000000000000005A /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (000000000000000000000034 /* MoraeAppTests.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
+		00000000000000000000005C /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (000000000000000000000035 /* HamsterEventCLITests.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		0000000000000000000000D0 /* PBXTargetDependency */ = {isa = PBXTargetDependency; target = 000000000000000000000040 /* MoraeCore */; targetProxy = 0000000000000000000000C0 /* PBXContainerItemProxy */; };
+		0000000000000000000000D1 /* PBXTargetDependency */ = {isa = PBXTargetDependency; target = 000000000000000000000040 /* MoraeCore */; targetProxy = 0000000000000000000000C1 /* PBXContainerItemProxy */; };
+		0000000000000000000000D2 /* PBXTargetDependency */ = {isa = PBXTargetDependency; target = 000000000000000000000040 /* MoraeCore */; targetProxy = 0000000000000000000000C2 /* PBXContainerItemProxy */; };
+		0000000000000000000000D3 /* PBXTargetDependency */ = {isa = PBXTargetDependency; target = 000000000000000000000041 /* MoraeApp */; targetProxy = 0000000000000000000000C3 /* PBXContainerItemProxy */; };
+		0000000000000000000000D4 /* PBXTargetDependency */ = {isa = PBXTargetDependency; target = 000000000000000000000042 /* HamsterEventCLI */; targetProxy = 0000000000000000000000C4 /* PBXContainerItemProxy */; };
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		0000000000000000000000A0 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {CLANG_ENABLE_MODULES = YES; ENABLE_TESTABILITY = YES; MACOSX_DEPLOYMENT_TARGET = 14.0; SDKROOT = macosx; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)"; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; SWIFT_VERSION = 6.0;}; name = Debug;};
+		0000000000000000000000A1 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {CLANG_ENABLE_MODULES = YES; MACOSX_DEPLOYMENT_TARGET = 14.0; SDKROOT = macosx; SWIFT_COMPILATION_MODE = wholemodule; SWIFT_OPTIMIZATION_LEVEL = "-O"; SWIFT_VERSION = 6.0;}; name = Release;};
+		0000000000000000000000B0 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {DEFINES_MODULE = YES; MACH_O_TYPE = staticlib; PRODUCT_NAME = "$(TARGET_NAME)"; SKIP_INSTALL = YES;}; name = Debug;};
+		0000000000000000000000B1 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {DEFINES_MODULE = YES; MACH_O_TYPE = staticlib; PRODUCT_NAME = "$(TARGET_NAME)"; SKIP_INSTALL = YES;}; name = Release;};
+		0000000000000000000000B2 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGNING_ALLOWED = NO; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_KEY_LSUIElement = YES; PRODUCT_BUNDLE_IDENTIFIER = local.morae.app; PRODUCT_NAME = Morae;}; name = Debug;};
+		0000000000000000000000B3 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGNING_ALLOWED = NO; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_KEY_LSUIElement = YES; PRODUCT_BUNDLE_IDENTIFIER = local.morae.app; PRODUCT_NAME = Morae;}; name = Release;};
+		0000000000000000000000B4 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {PRODUCT_NAME = "hamster-event"; SKIP_INSTALL = YES;}; name = Debug;};
+		0000000000000000000000B5 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {PRODUCT_NAME = "hamster-event"; SKIP_INSTALL = YES;}; name = Release;};
+		0000000000000000000000B6 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {BUNDLE_LOADER = ""; CODE_SIGNING_ALLOWED = NO; GENERATE_INFOPLIST_FILE = YES; PRODUCT_BUNDLE_IDENTIFIER = local.morae.coretests; PRODUCT_NAME = "$(TARGET_NAME)";}; name = Debug;};
+		0000000000000000000000B7 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {BUNDLE_LOADER = ""; CODE_SIGNING_ALLOWED = NO; GENERATE_INFOPLIST_FILE = YES; PRODUCT_BUNDLE_IDENTIFIER = local.morae.coretests; PRODUCT_NAME = "$(TARGET_NAME)";}; name = Release;};
+		0000000000000000000000B8 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {BUNDLE_LOADER = ""; CODE_SIGNING_ALLOWED = NO; GENERATE_INFOPLIST_FILE = YES; PRODUCT_BUNDLE_IDENTIFIER = local.morae.apptests; PRODUCT_NAME = "$(TARGET_NAME)";}; name = Debug;};
+		0000000000000000000000B9 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {BUNDLE_LOADER = ""; CODE_SIGNING_ALLOWED = NO; GENERATE_INFOPLIST_FILE = YES; PRODUCT_BUNDLE_IDENTIFIER = local.morae.apptests; PRODUCT_NAME = "$(TARGET_NAME)";}; name = Release;};
+		0000000000000000000000BA /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {BUNDLE_LOADER = ""; CODE_SIGNING_ALLOWED = NO; GENERATE_INFOPLIST_FILE = YES; PRODUCT_BUNDLE_IDENTIFIER = local.morae.clitests; PRODUCT_NAME = "$(TARGET_NAME)";}; name = Debug;};
+		0000000000000000000000BB /* Release */ = {isa = XCBuildConfiguration; buildSettings = {BUNDLE_LOADER = ""; CODE_SIGNING_ALLOWED = NO; GENERATE_INFOPLIST_FILE = YES; PRODUCT_BUNDLE_IDENTIFIER = local.morae.clitests; PRODUCT_NAME = "$(TARGET_NAME)";}; name = Release;};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		0000000000000000000000E0 /* Build configuration list for PBXProject "Morae" */ = {isa = XCConfigurationList; buildConfigurations = (0000000000000000000000A0 /* Debug */, 0000000000000000000000A1 /* Release */,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release;};
+		0000000000000000000000E1 /* Build configuration list for PBXNativeTarget "MoraeCore" */ = {isa = XCConfigurationList; buildConfigurations = (0000000000000000000000B0 /* Debug */, 0000000000000000000000B1 /* Release */,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release;};
+		0000000000000000000000E2 /* Build configuration list for PBXNativeTarget "MoraeApp" */ = {isa = XCConfigurationList; buildConfigurations = (0000000000000000000000B2 /* Debug */, 0000000000000000000000B3 /* Release */,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release;};
+		0000000000000000000000E3 /* Build configuration list for PBXNativeTarget "HamsterEventCLI" */ = {isa = XCConfigurationList; buildConfigurations = (0000000000000000000000B4 /* Debug */, 0000000000000000000000B5 /* Release */,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release;};
+		0000000000000000000000E4 /* Build configuration list for PBXNativeTarget "MoraeCoreTests" */ = {isa = XCConfigurationList; buildConfigurations = (0000000000000000000000B6 /* Debug */, 0000000000000000000000B7 /* Release */,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release;};
+		0000000000000000000000E5 /* Build configuration list for PBXNativeTarget "MoraeAppTests" */ = {isa = XCConfigurationList; buildConfigurations = (0000000000000000000000B8 /* Debug */, 0000000000000000000000B9 /* Release */,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release;};
+		0000000000000000000000E6 /* Build configuration list for PBXNativeTarget "HamsterEventCLITests" */ = {isa = XCConfigurationList; buildConfigurations = (0000000000000000000000BA /* Debug */, 0000000000000000000000BB /* Release */,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release;};
+/* End XCConfigurationList section */
+	};
+	rootObject = 000000000000000000000001 /* Project object */;
+}
