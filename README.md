@@ -12,6 +12,7 @@ macOS 바탕화면에서 매일의 지식, 업무 계획, AI 에이전트 작업
 - [High-Level Design](docs/HLD.md)
 - [Low-Level Design](docs/LLD.md)
 - [MVP Sprint Tasks](docs/SPRINT_TASKS.md)
+- [Sprint 1.5 UI Polish](docs/SPRINT_1_5_UI_POLISH.md)
 - [Architecture Decision Records](docs/adr/)
 
 ## 1. 제품 목표

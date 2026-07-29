@@ -73,6 +73,31 @@ Sprint 종료 데모:
 - 다음 날짜로 Clock을 이동하면 완료 항목이 “어제 한 일”에 나타납니다.
 - 앱을 재실행해도 데이터가 유지됩니다.
 
+## 3.1 Sprint 1.5 — 메뉴 막대 UI Polish
+
+목표: Sprint 1 기능을 유지하면서 소프트 블루 기반의 compact native UI, 전용 drag handle과 light/dark·keyboard 접근성 기반을 정리합니다.
+
+상세 계획: [Sprint 1.5 UI Polish](SPRINT_1_5_UI_POLISH.md)
+
+관련 결정: [ADR-0011](adr/0011-soft-blue-native-menu-bar-visual-system.md)
+
+| ID | 크기 | 태스크 | 선행 | 완료·검토 기준 |
+| --- | --- | --- | --- | --- |
+| S1.5-01 | XS | Soft-blue semantic token 구성 | S1-12 | `MoraeAccent` light/dark asset과 semantic foreground/background token이 native control에 적용됩니다. |
+| S1.5-02 | S | 패널·header·section hierarchy 정리 | S1.5-01 | 392pt 패널, compact header, 지역화 날짜와 section count가 ScrollView에서 잘리지 않습니다. |
+| S1.5-03 | S | Compact TodoRow 컴포넌트 분리 | S1.5-01 | checkbox, 중요도, 제목, 예상 시간과 action 영역이 재사용 가능한 row로 분리됩니다. |
+| S1.5-04 | M | 전용 drag handle과 drop indicator 구현 | S1.5-03 | pending handle에서만 drag가 시작되고 insertion line과 drop당 한 번의 reorder 저장을 검증합니다. |
+| S1.5-05 | S | Inline 편집·삭제·undo panel 정리 | S1.5-03 | 버튼 클릭 중 메뉴 패널이 닫히지 않고 저장·취소·삭제·undo focus가 예측 가능하게 동작합니다. |
+| S1.5-06 | S | Empty·error·validation 상태 통일 | S1.5-02, S1.5-03 | 네 section과 오류 상태가 공통 layout, 색상과 VoiceOver 문구를 사용합니다. |
+| S1.5-07 | S | Light/dark·keyboard·회귀 검증 | S1.5-04, S1.5-05, S1.5-06 | appearance별 checklist, keyboard-only 흐름과 기존 Sprint 1 테스트가 모두 통과합니다. |
+
+Sprint 종료 데모:
+
+- light/dark 모드에서 소프트 블루 accent와 native material이 일관되게 표시됩니다.
+- 전용 handle drag, drop indicator와 keyboard 순서 이동이 모두 동작합니다.
+- 추가·완료·편집·삭제·undo 중 메뉴 패널이 닫히지 않습니다.
+- 긴 제목과 empty/error 상태가 392pt 패널 안에서 잘리지 않습니다.
+
 ## 4. Sprint 2 — 아티클 메타데이터 수집·선정
 
 목표: 공식 피드에서 제목, 링크, 출처와 게시일을 읽어 최근 아티클 한 개를 선정합니다.
