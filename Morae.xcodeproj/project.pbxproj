@@ -20,6 +20,8 @@
 		00000000000000000000003A /* XCTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 000000000000000000000026 /* XCTest.framework */; };
 		00000000000000000000003B /* libMoraeCore.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 000000000000000000000020 /* libMoraeCore.a */; };
 		00000000000000000000003C /* AppDataDirectory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000016 /* AppDataDirectory.swift */; };
+		00000000000000000000003D /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = 0000000000000000000000F2 /* GRDB */; };
+		00000000000000000000003E /* FeedKit in Frameworks */ = {isa = PBXBuildFile; productRef = 0000000000000000000000F3 /* FeedKit */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -49,7 +51,7 @@
 
 /* Begin PBXFrameworksBuildPhase section */
 		000000000000000000000051 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
-		000000000000000000000054 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (00000000000000000000003B /* libMoraeCore.a in Frameworks */,); runOnlyForDeploymentPostprocessing = 0; };
+		000000000000000000000054 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (00000000000000000000003B /* libMoraeCore.a in Frameworks */, 00000000000000000000003D /* GRDB in Frameworks */, 00000000000000000000003E /* FeedKit in Frameworks */,); runOnlyForDeploymentPostprocessing = 0; };
 		000000000000000000000057 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (000000000000000000000036 /* libMoraeCore.a in Frameworks */,); runOnlyForDeploymentPostprocessing = 0; };
 		000000000000000000000059 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (000000000000000000000037 /* libMoraeCore.a in Frameworks */, 000000000000000000000038 /* XCTest.framework in Frameworks */,); runOnlyForDeploymentPostprocessing = 0; };
 		00000000000000000000005B /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (000000000000000000000039 /* XCTest.framework in Frameworks */,); runOnlyForDeploymentPostprocessing = 0; };
@@ -100,6 +102,10 @@
 			buildRules = ();
 			dependencies = (0000000000000000000000D0 /* PBXTargetDependency */,);
 			name = MoraeApp;
+			packageProductDependencies = (
+				0000000000000000000000F2 /* GRDB */,
+				0000000000000000000000F3 /* FeedKit */,
+			);
 			productName = Morae;
 			productReference = 000000000000000000000021 /* Morae.app */;
 			productType = "com.apple.product-type.application";
@@ -172,6 +178,10 @@
 			hasScannedForEncodings = 0;
 			knownRegions = (en, Base,);
 			mainGroup = 000000000000000000000002;
+			packageReferences = (
+				0000000000000000000000F0 /* XCRemoteSwiftPackageReference "GRDB.swift" */,
+				0000000000000000000000F1 /* XCRemoteSwiftPackageReference "FeedKit" */,
+			);
 			productRefGroup = 000000000000000000000003 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -226,6 +236,38 @@
 		0000000000000000000000E5 /* Build configuration list for PBXNativeTarget "MoraeAppTests" */ = {isa = XCConfigurationList; buildConfigurations = (0000000000000000000000B8 /* Debug */, 0000000000000000000000B9 /* Release */,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release;};
 		0000000000000000000000E6 /* Build configuration list for PBXNativeTarget "HamsterEventCLITests" */ = {isa = XCConfigurationList; buildConfigurations = (0000000000000000000000BA /* Debug */, 0000000000000000000000BB /* Release */,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release;};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		0000000000000000000000F0 /* XCRemoteSwiftPackageReference "GRDB.swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/groue/GRDB.swift.git";
+			requirement = {
+				kind = upToNextMinorVersion;
+				minimumVersion = 7.10.0;
+			};
+		};
+		0000000000000000000000F1 /* XCRemoteSwiftPackageReference "FeedKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/nmdias/FeedKit.git";
+			requirement = {
+				kind = upToNextMinorVersion;
+				minimumVersion = 10.4.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		0000000000000000000000F2 /* GRDB */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 0000000000000000000000F0 /* XCRemoteSwiftPackageReference "GRDB.swift" */;
+			productName = GRDB;
+		};
+		0000000000000000000000F3 /* FeedKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 0000000000000000000000F1 /* XCRemoteSwiftPackageReference "FeedKit" */;
+			productName = FeedKit;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 000000000000000000000001 /* Project object */;
 }
