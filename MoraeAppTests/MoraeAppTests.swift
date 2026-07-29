@@ -1,4 +1,5 @@
 import XCTest
+import MoraeCore
 @testable import MoraeApp
 
 final class MoraeAppTests: XCTestCase {
@@ -27,5 +28,26 @@ final class MoraeAppTests: XCTestCase {
             XCTAssertFalse((error as? LocalizedError)?.errorDescription?.isEmpty ?? true)
             XCTAssertFalse((error as? LocalizedError)?.recoverySuggestion?.isEmpty ?? true)
         }
+    }
+
+    @MainActor
+    func testAppContainerInjectsSubstituteUseCase() async {
+        let loader = StubMenuBarContentLoader(message: "Injected")
+        let container = AppContainer(
+            clock: SystemClock(),
+            menuBarContentLoader: loader
+        )
+
+        let content = await container.menuBarContentLoader.execute()
+
+        XCTAssertEqual(content, MenuBarContent(message: "Injected"))
+    }
+}
+
+private struct StubMenuBarContentLoader: MenuBarContentLoading {
+    let message: String
+
+    func execute() async -> MenuBarContent {
+        MenuBarContent(message: message)
     }
 }
