@@ -297,87 +297,33 @@ struct MenuBarRootView: View {
     }
 
     private func todoRowContent(_ item: TodoItem) -> some View {
-        HStack(spacing: 8) {
-            Button {
+        let pendingItems = viewModel.todayTodos.filter { $0.status == .pending }
+        return TodoRowView(
+            item: item,
+            canMoveUp: pendingItems.first?.id != item.id,
+            canMoveDown: pendingItems.last?.id != item.id,
+            onToggleCompletion: {
                 Task {
                     await viewModel.toggleTodo(id: item.id)
                 }
-            } label: {
-                Image(
-                    systemName: item.status == .completed
-                        ? "checkmark.circle.fill"
-                        : "circle"
-                )
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(
-                item.status == .completed
-                    ? "\(item.title) 미완료로 변경"
-                    : "\(item.title) 완료"
-            )
-
-            if item.priority == .important {
-                Image(systemName: "star.fill")
-                    .foregroundStyle(.orange)
-                    .accessibilityLabel("중요")
-            }
-            Text(item.title)
-                .strikethrough(item.status == .completed)
-                .foregroundStyle(
-                    item.status == .completed ? .secondary : .primary
-                )
-                .lineLimit(2)
-            Spacer()
-            if let minutes = item.estimatedMinutes {
-                Text("\(minutes)분")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            if item.status == .pending {
-                Button {
-                    Task {
-                        await viewModel.movePending(id: item.id, direction: .up)
-                    }
-                } label: {
-                    Image(systemName: "arrow.up")
+            },
+            onMoveUp: {
+                Task {
+                    await viewModel.movePending(id: item.id, direction: .up)
                 }
-                .buttonStyle(.plain)
-                .disabled(
-                    viewModel.todayTodos
-                        .filter { $0.status == .pending }
-                        .first?.id == item.id
-                )
-                .accessibilityLabel("\(item.title) 위로 이동")
-                Button {
-                    Task {
-                        await viewModel.movePending(id: item.id, direction: .down)
-                    }
-                } label: {
-                    Image(systemName: "arrow.down")
+            },
+            onMoveDown: {
+                Task {
+                    await viewModel.movePending(id: item.id, direction: .down)
                 }
-                .buttonStyle(.plain)
-                .disabled(
-                    viewModel.todayTodos
-                        .filter { $0.status == .pending }
-                        .last?.id == item.id
-                )
-                .accessibilityLabel("\(item.title) 아래로 이동")
-            }
-            Button {
+            },
+            onEdit: {
                 editingDraft = TodoEditDraft(item: item)
-            } label: {
-                Image(systemName: "pencil")
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("\(item.title) 편집")
-            Button {
+            },
+            onDelete: {
                 viewModel.requestDelete(id: item.id)
-            } label: {
-                Image(systemName: "trash")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("\(item.title) 삭제")
-        }
+        )
     }
 
     private func submitQuickAdd() {
