@@ -7,6 +7,7 @@ protocol TodoRepository: Sendable {
     func listCompleted(day: LocalDay) async throws -> [TodoItem]
     func insert(_ item: TodoItem) async throws
     func update(_ item: TodoItem) async throws
+    func setCompletion(id: TodoID, isCompleted: Bool, at: Date) async throws -> TodoItem
     func delete(id: TodoID) async throws
     func reorder(day: LocalDay, orderedIDs: [TodoID]) async throws
     func carryOverPending(from: LocalDay, to: LocalDay) async throws
@@ -19,6 +20,11 @@ enum TodoMappingError: Error, Equatable, Sendable {
     case invalidPriority(Int)
     case invalidURL(String)
     case invalidDomainValue(TodoValidationError)
+}
+
+enum TodoRepositoryError: Error, Equatable, Sendable {
+    case notFound(TodoID)
+    case reorderMismatch
 }
 
 struct TodoRecord: Codable, FetchableRecord, PersistableRecord, TableRecord, Sendable {
@@ -172,6 +178,29 @@ final class GRDBTodoRepository: @unchecked Sendable {
     func update(_ item: TodoItem) async throws {
         try await writer.write { database in
             try TodoRecord(item: item).update(database)
+        }
+    }
+
+    func setCompletion(
+        id: TodoID,
+        isCompleted: Bool,
+        at date: Date
+    ) async throws -> TodoItem {
+        try await writer.write { database in
+            guard var record = try TodoRecord.fetchOne(
+                database,
+                key: id.storageValue
+            ) else {
+                throw TodoRepositoryError.notFound(id)
+            }
+
+            record.status = isCompleted
+                ? TodoStatus.completed.rawValue
+                : TodoStatus.pending.rawValue
+            record.completedAtMs = isCompleted ? date.unixMilliseconds : nil
+            record.updatedAtMs = date.unixMilliseconds
+            try record.update(database)
+            return try record.domain()
         }
     }
 }

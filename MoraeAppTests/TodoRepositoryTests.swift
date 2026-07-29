@@ -94,6 +94,41 @@ final class TodoRepositoryTests: XCTestCase {
         XCTAssertEqual(restored.updatedAt, updatedAt)
         XCTAssertEqual(restored.createdAt, original.createdAt)
     }
+
+    func testCompletionTransitionKeepsStatusInvariantInOneTransaction() async throws {
+        let database = try AppDatabase.inMemory()
+        let repository = GRDBTodoRepository(database: database)
+        let day = try LocalDay(rawValue: "2026-07-29")
+        let original = try makeTodo(
+            title: "Toggle me",
+            day: day,
+            sortOrder: 0
+        )
+        try await repository.insert(original)
+
+        let completionTime = Date(unixMilliseconds: 1_775_039_900_000)
+        let completed = try await repository.setCompletion(
+            id: original.id,
+            isCompleted: true,
+            at: completionTime
+        )
+        XCTAssertEqual(completed.status, .completed)
+        XCTAssertEqual(completed.completedAt, completionTime)
+        XCTAssertEqual(completed.updatedAt, completionTime)
+
+        let reopenedAt = Date(unixMilliseconds: 1_775_040_000_000)
+        let pending = try await repository.setCompletion(
+            id: original.id,
+            isCompleted: false,
+            at: reopenedAt
+        )
+        XCTAssertEqual(pending.status, .pending)
+        XCTAssertNil(pending.completedAt)
+        XCTAssertEqual(pending.updatedAt, reopenedAt)
+
+        let stored = try await repository.list(day: day)
+        XCTAssertEqual(stored, [pending])
+    }
 }
 
 func makeTodo(
