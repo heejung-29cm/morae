@@ -73,41 +73,6 @@ struct MenuBarRootView: View {
         .task {
             await viewModel.onAppear()
         }
-        .sheet(item: $editingDraft) { draft in
-            TodoEditorView(
-                initialDraft: draft,
-                onSave: { updatedDraft in
-                    if await viewModel.updateTodo(updatedDraft) {
-                        editingDraft = nil
-                    }
-                },
-                onCancel: {
-                    editingDraft = nil
-                }
-            )
-        }
-        .alert(
-            "할 일을 삭제할까요?",
-            isPresented: Binding(
-                get: { viewModel.deletionCandidate != nil },
-                set: { presented in
-                    if !presented {
-                        viewModel.cancelDelete()
-                    }
-                }
-            )
-        ) {
-            Button("삭제", role: .destructive) {
-                Task {
-                    await viewModel.confirmDelete()
-                }
-            }
-            Button("취소", role: .cancel) {
-                viewModel.cancelDelete()
-            }
-        } message: {
-            Text(viewModel.deletionCandidate?.title ?? "")
-        }
     }
 
     private var header: some View {
@@ -210,6 +175,23 @@ struct MenuBarRootView: View {
                     todayTodoRow(item)
                 }
             }
+            if let draft = editingDraft {
+                TodoEditorView(
+                    initialDraft: draft,
+                    onSave: { updatedDraft in
+                        if await viewModel.updateTodo(updatedDraft) {
+                            editingDraft = nil
+                        }
+                    },
+                    onCancel: {
+                        editingDraft = nil
+                    }
+                )
+                .id(draft.id)
+            }
+            if let deletionCandidate = viewModel.deletionCandidate {
+                inlineDeleteConfirmation(deletionCandidate)
+            }
             if let validationMessage = viewModel.validationMessage {
                 Text(validationMessage)
                     .font(.caption)
@@ -237,6 +219,28 @@ struct MenuBarRootView: View {
                     .accessibilityLabel("오류, \(errorMessage)")
             }
         }
+    }
+
+    private func inlineDeleteConfirmation(_ item: TodoItem) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("‘\(item.title)’을 삭제할까요?", systemImage: "trash")
+                .font(.subheadline.weight(.semibold))
+            HStack {
+                Spacer()
+                Button("취소", role: .cancel) {
+                    viewModel.cancelDelete()
+                }
+                .keyboardShortcut(.cancelAction)
+                Button("삭제", role: .destructive) {
+                    Task {
+                        await viewModel.confirmDelete()
+                    }
+                }
+            }
+        }
+        .padding(10)
+        .background(.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+        .accessibilityElement(children: .contain)
     }
 
     @ViewBuilder
@@ -413,15 +417,21 @@ private struct TodoEditorView: View {
     }
 
     var body: some View {
-        Form {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("할 일 편집", systemImage: "pencil")
+                .font(.subheadline.weight(.semibold))
             TextField("제목", text: $draft.title)
+                .textFieldStyle(.roundedBorder)
             Toggle("중요", isOn: Binding(
                 get: { draft.priority == .important },
                 set: { draft.priority = $0 ? .important : .normal }
             ))
             TextField("예상 시간(분)", text: $draft.estimatedMinutes)
+                .textFieldStyle(.roundedBorder)
             TextField("관련 URL", text: $draft.relatedURL)
+                .textFieldStyle(.roundedBorder)
             TextField("프로젝트 경로", text: $draft.projectPath)
+                .textFieldStyle(.roundedBorder)
             HStack {
                 Spacer()
                 Button("취소", role: .cancel, action: onCancel)
@@ -434,7 +444,8 @@ private struct TodoEditorView: View {
                 .keyboardShortcut(.defaultAction)
             }
         }
-        .padding()
-        .frame(width: 360)
+        .padding(10)
+        .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+        .accessibilityElement(children: .contain)
     }
 }
