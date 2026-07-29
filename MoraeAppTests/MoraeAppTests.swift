@@ -300,6 +300,30 @@ final class MoraeAppTests: XCTestCase {
             }
         )
     }
+
+    func testTodoReorderPlanMovesOnlyMeaningfulPendingDrops() {
+        let first = TodoID(
+            rawValue: UUID(uuidString: "85E52B30-69DD-4685-825E-1B66DCE08D9A")!
+        )
+        let second = TodoID(
+            rawValue: UUID(uuidString: "68211FC7-66D8-4D3E-BBA0-CDBB47E77193")!
+        )
+        let third = TodoID(
+            rawValue: UUID(uuidString: "EBC2F6CD-12AE-4825-B86F-C5075FBE96F9")!
+        )
+        let original = [first, second, third]
+
+        XCTAssertEqual(
+            TodoReorderPlan.moving(third, before: first, in: original)?.orderedIDs,
+            [third, first, second]
+        )
+        XCTAssertNil(
+            TodoReorderPlan.moving(first, before: second, in: original)
+        )
+        XCTAssertNil(
+            TodoReorderPlan.moving(first, before: first, in: original)
+        )
+    }
 }
 
 private struct StubMenuBarContentLoader: MenuBarContentLoading {

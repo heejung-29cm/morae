@@ -5,7 +5,11 @@ struct TodoRowView: View {
     let item: TodoItem
     let canMoveUp: Bool
     let canMoveDown: Bool
+    let dragIdentifier: String?
+    let isDragging: Bool
+    let showsDropIndicator: Bool
     let onToggleCompletion: () -> Void
+    let onDragStarted: () -> Void
     let onMoveUp: () -> Void
     let onMoveDown: () -> Void
     let onEdit: () -> Void
@@ -15,6 +19,7 @@ struct TodoRowView: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: MoraeSpacing.small) {
+            dragHandle
             completionButton
             titleAndMetadata
             Spacer(minLength: MoraeSpacing.xSmall)
@@ -28,7 +33,34 @@ struct TodoRowView: View {
         )
         .contentShape(Rectangle())
         .onHover { isHovered = $0 }
+        .opacity(isDragging ? 0.46 : 1)
+        .overlay(alignment: .top) {
+            if showsDropIndicator {
+                Capsule()
+                    .fill(MoraeColor.accent)
+                    .frame(height: 2)
+                    .offset(y: -1)
+                    .accessibilityHidden(true)
+            }
+        }
         .accessibilityElement(children: .contain)
+    }
+
+    @ViewBuilder
+    private var dragHandle: some View {
+        if let dragIdentifier {
+            Image(systemName: "circle.grid.2x3.fill")
+                .font(.system(size: 11))
+                .foregroundStyle(MoraeColor.secondaryForeground)
+                .frame(width: 16, height: 24)
+                .contentShape(Rectangle())
+                .onDrag {
+                    onDragStarted()
+                    return NSItemProvider(object: dragIdentifier as NSString)
+                }
+                .help("드래그하여 순서 변경")
+                .accessibilityLabel("\(item.title) 순서 변경 핸들")
+        }
     }
 
     private var completionButton: some View {

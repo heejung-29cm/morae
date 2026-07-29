@@ -48,6 +48,8 @@ struct MenuBarRootView: View {
     @State private var viewModel: MenuBarViewModel
     @State private var quickAddTitle = ""
     @State private var editingDraft: TodoEditDraft?
+    @State private var draggedTodoID: TodoID?
+    @State private var dropTargetID: TodoID?
 
     init(container: AppContainer) {
         self.container = container
@@ -277,19 +279,30 @@ struct MenuBarRootView: View {
     private func todayTodoRow(_ item: TodoItem) -> some View {
         if item.status == .pending {
             todoRowContent(item)
-                .draggable(item.id.storageValue)
                 .dropDestination(for: String.self) { identifiers, _ in
+                    defer {
+                        draggedTodoID = nil
+                        dropTargetID = nil
+                    }
                     guard let sourceStorageID = identifiers.first,
-                          let source = viewModel.todayTodos.first(
-                            where: { $0.id.storageValue == sourceStorageID }
-                          ),
-                          source.status == .pending else {
+                          let source = pendingTodo(storageID: sourceStorageID),
+                          TodoReorderPlan.moving(
+                            source.id,
+                            before: item.id,
+                            in: pendingTodoIDs
+                          ) != nil else {
                         return false
                     }
                     Task {
                         await viewModel.movePending(id: source.id, before: item.id)
                     }
                     return true
+                } isTargeted: { isTargeted in
+                    if isTargeted, draggedTodoID != item.id {
+                        dropTargetID = item.id
+                    } else if dropTargetID == item.id {
+                        dropTargetID = nil
+                    }
                 }
         } else {
             todoRowContent(item)
@@ -302,10 +315,18 @@ struct MenuBarRootView: View {
             item: item,
             canMoveUp: pendingItems.first?.id != item.id,
             canMoveDown: pendingItems.last?.id != item.id,
+            dragIdentifier: item.status == .pending
+                ? item.id.storageValue
+                : nil,
+            isDragging: draggedTodoID == item.id,
+            showsDropIndicator: dropTargetID == item.id,
             onToggleCompletion: {
                 Task {
                     await viewModel.toggleTodo(id: item.id)
                 }
+            },
+            onDragStarted: {
+                draggedTodoID = item.id
             },
             onMoveUp: {
                 Task {
@@ -324,6 +345,18 @@ struct MenuBarRootView: View {
                 viewModel.requestDelete(id: item.id)
             }
         )
+    }
+
+    private var pendingTodoIDs: [TodoID] {
+        viewModel.todayTodos
+            .filter { $0.status == .pending }
+            .map(\.id)
+    }
+
+    private func pendingTodo(storageID: String) -> TodoItem? {
+        viewModel.todayTodos.first {
+            $0.status == .pending && $0.id.storageValue == storageID
+        }
     }
 
     private func submitQuickAdd() {

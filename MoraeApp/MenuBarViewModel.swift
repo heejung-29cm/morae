@@ -227,16 +227,20 @@ final class MenuBarViewModel {
     }
 
     func movePending(id: TodoID, before targetID: TodoID) async {
-        var pending = todayTodos.filter { $0.status == .pending }
-        guard id != targetID,
-              let sourceIndex = pending.firstIndex(where: { $0.id == id }),
-              let targetIndex = pending.firstIndex(where: { $0.id == targetID }) else {
+        let pending = todayTodos.filter { $0.status == .pending }
+        guard let plan = TodoReorderPlan.moving(
+            id,
+            before: targetID,
+            in: pending.map(\.id)
+        ) else {
             return
         }
-        let moved = pending.remove(at: sourceIndex)
-        let adjustedTarget = sourceIndex < targetIndex ? targetIndex - 1 : targetIndex
-        pending.insert(moved, at: adjustedTarget)
-        await persistPendingOrder(pending)
+        let itemsByID = Dictionary(
+            uniqueKeysWithValues: pending.map { ($0.id, $0) }
+        )
+        await persistPendingOrder(
+            plan.orderedIDs.compactMap { itemsByID[$0] }
+        )
     }
 
     func toggleCarryOverSelection(id: TodoID) {
