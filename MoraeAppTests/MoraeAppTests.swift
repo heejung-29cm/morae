@@ -1,3 +1,4 @@
+import AppKit
 import XCTest
 import GRDB
 import MoraeCore
@@ -322,6 +323,39 @@ final class MoraeAppTests: XCTestCase {
         )
         XCTAssertNil(
             TodoReorderPlan.moving(first, before: first, in: original)
+        )
+    }
+
+    @MainActor
+    func testMoraeAccentResolvesToDifferentLightAndDarkColors() throws {
+        let accent = try XCTUnwrap(
+            NSColor(
+                named: NSColor.Name("MoraeAccent"),
+                bundle: .main
+            )
+        )
+        let lightAppearance = try XCTUnwrap(NSAppearance(named: .aqua))
+        let darkAppearance = try XCTUnwrap(NSAppearance(named: .darkAqua))
+        var light: NSColor?
+        var dark: NSColor?
+        lightAppearance.performAsCurrentDrawingAppearance {
+            light = accent.usingColorSpace(.sRGB)
+        }
+        darkAppearance.performAsCurrentDrawingAppearance {
+            dark = accent.usingColorSpace(.sRGB)
+        }
+
+        XCTAssertNotEqual(light, dark)
+    }
+
+    func testMenuBarStateKindsProvideAccessibleFallbacks() {
+        let kinds: [MenuBarStateKind] = [.empty, .validation, .error]
+
+        XCTAssertTrue(
+            kinds.allSatisfy {
+                !$0.defaultSystemImage.isEmpty
+                    && !$0.accessibilityPrefix.isEmpty
+            }
         )
     }
 }

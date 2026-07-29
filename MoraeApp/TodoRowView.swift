@@ -44,6 +44,16 @@ struct TodoRowView: View {
             }
         }
         .accessibilityElement(children: .contain)
+        .accessibilityActions {
+            if item.status == .pending, canMoveUp {
+                Button("위로 이동", action: onMoveUp)
+            }
+            if item.status == .pending, canMoveDown {
+                Button("아래로 이동", action: onMoveDown)
+            }
+            Button("편집", action: onEdit)
+            Button("삭제", action: onDelete)
+        }
     }
 
     @ViewBuilder
@@ -162,6 +172,7 @@ struct TodoRowView: View {
         }
         .buttonStyle(.plain)
         .disabled(isDisabled)
+        .help(accessibilityLabel)
         .accessibilityLabel(accessibilityLabel)
     }
 }

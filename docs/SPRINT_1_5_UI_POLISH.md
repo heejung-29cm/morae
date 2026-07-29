@@ -1,10 +1,11 @@
 # 모래 Sprint 1.5 — 메뉴 막대 UI Polish
 
-> 상태: Ready for implementation  
+> 상태: Implemented — automated verification complete
 > 작성: 2026-07-29  
 > 선행: Sprint 1 완료  
 > 후속: Sprint 2  
 > 관련 결정: [ADR-0011](adr/0011-soft-blue-native-menu-bar-visual-system.md)
+> 직접 확인: [Sprint 1.5 데모 체크리스트](SPRINT_1_5_DEMO_CHECKLIST.md)
 
 ## 1. 목적
 
@@ -109,3 +110,13 @@ Sprint 1에서 검증한 할 일 관리 흐름을 유지하면서 메뉴 막대 
 - VoiceOver label은 상태와 action을 색상 없이 이해할 수 있는지 확인합니다.
 - 시스템 sheet/alert가 메뉴 패널에 다시 추가되지 않았는지 코드 리뷰에서 확인합니다.
 
+## 8. 구현 결과
+
+- `MoraeAccent` Asset Catalog에 light/dark 소프트 블루를 추가했습니다.
+- 392pt native material 패널, compact header와 section count를 적용했습니다.
+- `TodoRowView`, `TodoInlinePanels`, `MenuBarStateView`로 화면 요소를 분리했습니다.
+- pending 전용 drag handle, insertion indicator와 keyboard·VoiceOver 이동 action을 추가했습니다.
+- 의미 없는 drop을 제외하고 확정된 drop당 repository reorder가 한 번 호출되는지 테스트합니다.
+- 시스템 sheet/alert 없이 inline 편집·삭제·undo 흐름을 유지합니다.
+- macOS Debug build와 전체 31개 자동화 테스트가 통과했습니다.
+- 자동화 테스트와 사용자의 실제 `MenuBarExtra` 점검 범위는 [데모 체크리스트](SPRINT_1_5_DEMO_CHECKLIST.md)로 구분합니다.

@@ -1,4 +1,5 @@
 import Foundation
+import GRDB
 import MoraeCore
 import XCTest
 @testable import MoraeApp
@@ -503,6 +504,118 @@ final class TodoRepositoryTests: XCTestCase {
         .execute(today: dayTwo, calendar: calendar)
         XCTAssertEqual(nextDaySummary.yesterdayCompleted.map(\.id), [completed.id])
         XCTAssertTrue(nextDaySummary.todayPending.isEmpty)
+    }
+
+    @MainActor
+    func testDragDropPersistsExactlyOnceAndSkipsNoOp() async throws {
+        let database = try AppDatabase.inMemory()
+        let baseRepository = GRDBTodoRepository(database: database)
+        let repository = CountingTodoRepository(base: baseRepository)
+        let day = try LocalDay(rawValue: "2026-04-01")
+        let first = try makeTodo(title: "First", day: day, sortOrder: 0)
+        let second = try makeTodo(title: "Second", day: day, sortOrder: 1)
+        let third = try makeTodo(title: "Third", day: day, sortOrder: 2)
+        for item in [first, second, third] {
+            try await baseRepository.insert(item)
+        }
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let viewModel = MenuBarViewModel(
+            repository: repository,
+            clock: FixedClock(
+                instant: Date(unixMilliseconds: 1_775_001_600_000)
+            ),
+            calendar: calendar
+        )
+        XCTAssertEqual(viewModel.today, day)
+        await viewModel.onAppear()
+
+        await viewModel.movePending(id: third.id, before: first.id)
+        XCTAssertEqual(repository.reorderCallCount, 1)
+
+        await viewModel.movePending(id: first.id, before: second.id)
+        XCTAssertEqual(repository.reorderCallCount, 1)
+    }
+}
+
+private final class CountingTodoRepository: TodoRepository, @unchecked Sendable {
+    private let base: GRDBTodoRepository
+    private let lock = NSLock()
+    private var storedReorderCallCount = 0
+
+    init(base: GRDBTodoRepository) {
+        self.base = base
+    }
+
+    var reorderCallCount: Int {
+        lock.withLock { storedReorderCallCount }
+    }
+
+    func list(day: LocalDay) async throws -> [TodoItem] {
+        try await base.list(day: day)
+    }
+
+    func listCompleted(day: LocalDay) async throws -> [TodoItem] {
+        try await base.listCompleted(day: day)
+    }
+
+    func insert(_ item: TodoItem) async throws {
+        try await base.insert(item)
+    }
+
+    func update(_ item: TodoItem) async throws {
+        try await base.update(item)
+    }
+
+    func setCompletion(
+        id: TodoID,
+        isCompleted: Bool,
+        at date: Date
+    ) async throws -> TodoItem {
+        try await base.setCompletion(
+            id: id,
+            isCompleted: isCompleted,
+            at: date
+        )
+    }
+
+    func delete(id: TodoID) async throws {
+        try await base.delete(id: id)
+    }
+
+    func reorder(day: LocalDay, orderedIDs: [TodoID]) async throws {
+        lock.withLock {
+            storedReorderCallCount += 1
+        }
+        try await base.reorder(day: day, orderedIDs: orderedIDs)
+    }
+
+    func carryOverPending(
+        from: LocalDay,
+        to: LocalDay
+    ) async throws {
+        try await base.carryOverPending(from: from, to: to)
+    }
+
+    func carryOverPending(
+        from: LocalDay,
+        to: LocalDay,
+        selectedIDs: [TodoID],
+        newIDs: [TodoID],
+        at date: Date
+    ) async throws -> [TodoItem] {
+        try await base.carryOverPending(
+            from: from,
+            to: to,
+            selectedIDs: selectedIDs,
+            newIDs: newIDs,
+            at: date
+        )
+    }
+
+    func observation(day: LocalDay) -> AsyncValueObservation<[TodoItem]> {
+        base.observation(day: day)
     }
 }
 

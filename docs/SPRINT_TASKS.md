@@ -81,6 +81,8 @@ Sprint 종료 데모:
 
 관련 결정: [ADR-0011](adr/0011-soft-blue-native-menu-bar-visual-system.md)
 
+직접 확인: [Sprint 1.5 데모 체크리스트](SPRINT_1_5_DEMO_CHECKLIST.md)
+
 | ID | 크기 | 태스크 | 선행 | 완료·검토 기준 |
 | --- | --- | --- | --- | --- |
 | S1.5-01 | XS | Soft-blue semantic token 구성 | S1-12 | `MoraeAccent` light/dark asset과 semantic foreground/background token이 native control에 적용됩니다. |
