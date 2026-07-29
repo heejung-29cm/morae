@@ -26,6 +26,7 @@
 		200000000000000000000001 /* CoreStates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000001 /* CoreStates.swift */; };
 		200000000000000000000002 /* AppContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000002 /* AppContainer.swift */; };
 		200000000000000000000003 /* Logging.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000003 /* Logging.swift */; };
+		200000000000000000000004 /* AppDatabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000004 /* AppDatabase.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -48,6 +49,7 @@
 		100000000000000000000001 /* CoreStates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreStates.swift; sourceTree = "<group>"; };
 		100000000000000000000002 /* AppContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppContainer.swift; sourceTree = "<group>"; };
 		100000000000000000000003 /* Logging.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Logging.swift; sourceTree = "<group>"; };
+		100000000000000000000004 /* AppDatabase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDatabase.swift; sourceTree = "<group>"; };
 		000000000000000000000020 /* libMoraeCore.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libMoraeCore.a; sourceTree = BUILT_PRODUCTS_DIR; };
 		000000000000000000000021 /* Morae.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Morae.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		000000000000000000000022 /* hamster-event */ = {isa = PBXFileReference; explicitFileType = compiled.mach-o.executable; includeInIndex = 0; path = "hamster-event"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -83,7 +85,7 @@
 		};
 		000000000000000000000003 /* Products */ = {isa = PBXGroup; children = (000000000000000000000020 /* libMoraeCore.a */, 000000000000000000000021 /* Morae.app */, 000000000000000000000022 /* hamster-event */, 000000000000000000000023 /* MoraeCoreTests.xctest */, 000000000000000000000024 /* MoraeAppTests.xctest */, 000000000000000000000025 /* HamsterEventCLITests.xctest */,); name = Products; sourceTree = "<group>"; };
 		000000000000000000000004 /* MoraeCore */ = {isa = PBXGroup; children = (000000000000000000000010 /* MoraeCore.swift */, 000000000000000000000017 /* CoreValues.swift */, 100000000000000000000001 /* CoreStates.swift */,); path = MoraeCore; sourceTree = "<group>"; };
-		000000000000000000000005 /* MoraeApp */ = {isa = PBXGroup; children = (000000000000000000000011 /* MoraeApp.swift */, 000000000000000000000016 /* AppDataDirectory.swift */, 100000000000000000000002 /* AppContainer.swift */, 100000000000000000000003 /* Logging.swift */,); path = MoraeApp; sourceTree = "<group>"; };
+		000000000000000000000005 /* MoraeApp */ = {isa = PBXGroup; children = (000000000000000000000011 /* MoraeApp.swift */, 000000000000000000000016 /* AppDataDirectory.swift */, 100000000000000000000002 /* AppContainer.swift */, 100000000000000000000003 /* Logging.swift */, 100000000000000000000004 /* AppDatabase.swift */,); path = MoraeApp; sourceTree = "<group>"; };
 		000000000000000000000006 /* HamsterEventCLI */ = {isa = PBXGroup; children = (000000000000000000000012 /* main.swift */,); path = HamsterEventCLI; sourceTree = "<group>"; };
 		000000000000000000000007 /* MoraeCoreTests */ = {isa = PBXGroup; children = (000000000000000000000013 /* MoraeCoreTests.swift */,); path = MoraeCoreTests; sourceTree = "<group>"; };
 		000000000000000000000008 /* MoraeAppTests */ = {isa = PBXGroup; children = (000000000000000000000014 /* MoraeAppTests.swift */,); path = MoraeAppTests; sourceTree = "<group>"; };
@@ -203,7 +205,7 @@
 
 /* Begin PBXSourcesBuildPhase section */
 		000000000000000000000050 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (000000000000000000000030 /* MoraeCore.swift in Sources */, 00000000000000000000003F /* CoreValues.swift in Sources */, 200000000000000000000001 /* CoreStates.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
-		000000000000000000000053 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (000000000000000000000031 /* MoraeApp.swift in Sources */, 00000000000000000000003C /* AppDataDirectory.swift in Sources */, 200000000000000000000002 /* AppContainer.swift in Sources */, 200000000000000000000003 /* Logging.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
+		000000000000000000000053 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (000000000000000000000031 /* MoraeApp.swift in Sources */, 00000000000000000000003C /* AppDataDirectory.swift in Sources */, 200000000000000000000002 /* AppContainer.swift in Sources */, 200000000000000000000003 /* Logging.swift in Sources */, 200000000000000000000004 /* AppDatabase.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
 		000000000000000000000056 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (000000000000000000000032 /* main.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
 		000000000000000000000058 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (000000000000000000000033 /* MoraeCoreTests.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
 		00000000000000000000005A /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (000000000000000000000034 /* MoraeAppTests.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
@@ -219,7 +221,7 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
-		0000000000000000000000A0 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {CLANG_ENABLE_MODULES = YES; ENABLE_TESTABILITY = YES; MACOSX_DEPLOYMENT_TARGET = 14.0; SDKROOT = macosx; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)"; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; SWIFT_VERSION = 6.0;}; name = Debug;};
+		0000000000000000000000A0 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {CLANG_ENABLE_MODULES = YES; ENABLE_TESTABILITY = YES; MACOSX_DEPLOYMENT_TARGET = 14.0; ONLY_ACTIVE_ARCH = YES; SDKROOT = macosx; SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)"; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; SWIFT_VERSION = 6.0;}; name = Debug;};
 		0000000000000000000000A1 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {CLANG_ENABLE_MODULES = YES; MACOSX_DEPLOYMENT_TARGET = 14.0; SDKROOT = macosx; SWIFT_COMPILATION_MODE = wholemodule; SWIFT_OPTIMIZATION_LEVEL = "-O"; SWIFT_VERSION = 6.0;}; name = Release;};
 		0000000000000000000000B0 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {DEFINES_MODULE = YES; MACH_O_TYPE = staticlib; PRODUCT_NAME = "$(TARGET_NAME)"; SKIP_INSTALL = YES;}; name = Debug;};
 		0000000000000000000000B1 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {DEFINES_MODULE = YES; MACH_O_TYPE = staticlib; PRODUCT_NAME = "$(TARGET_NAME)"; SKIP_INSTALL = YES;}; name = Release;};

@@ -1,4 +1,5 @@
 import XCTest
+import GRDB
 import MoraeCore
 @testable import MoraeApp
 
@@ -85,6 +86,101 @@ final class MoraeAppTests: XCTestCase {
             metadata.description,
             "result=failed duration_ms=125 byte_count=512 http_status=503 "
                 + "migration_version=1 count=4 error_code=feed_unavailable"
+        )
+    }
+
+    func testInMemoryV1MigrationCreatesEntireSchema() throws {
+        let database = try AppDatabase.inMemory()
+
+        let objects = try database.read { db in
+            try String.fetchAll(
+                db,
+                sql: """
+                    SELECT name
+                    FROM sqlite_master
+                    WHERE type IN ('table', 'index')
+                      AND name NOT LIKE 'sqlite_%'
+                    """
+            )
+        }
+
+        XCTAssertTrue(Set([
+            "tasks",
+            "feed_sources",
+            "articles",
+            "briefing_runs",
+            "agent_runs",
+            "agent_events",
+            "idx_tasks_day_status_order",
+            "idx_articles_published",
+            "idx_briefing_runs_day_triggered",
+            "idx_agent_runs_recent",
+            "idx_agent_runs_retention",
+            "idx_agent_runs_open_session",
+            "idx_agent_events_run_time",
+        ]).isSubset(of: Set(objects)))
+
+        let migrations = try database.read { db in
+            try String.fetchAll(
+                db,
+                sql: "SELECT identifier FROM grdb_migrations"
+            )
+        }
+        XCTAssertEqual(migrations, ["v1_initial"])
+    }
+
+    func testDatabaseEnablesForeignKeysAndBusyTimeout() throws {
+        let database = try AppDatabase.inMemory()
+
+        let settings = try database.read { db in
+            (
+                try Int.fetchOne(db, sql: "PRAGMA foreign_keys"),
+                try Int.fetchOne(db, sql: "PRAGMA busy_timeout")
+            )
+        }
+
+        XCTAssertEqual(settings.0, 1)
+        XCTAssertEqual(settings.1, 3_000)
+    }
+
+    func testFileDatabaseUsesWALAndEnforcesTaskCheckConstraint() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: root,
+            withIntermediateDirectories: true
+        )
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let databaseURL = root.appendingPathComponent("morae.sqlite")
+        let database = try AppDatabase.open(at: databaseURL)
+        let journalMode = try database.read { db in
+            try String.fetchOne(db, sql: "PRAGMA journal_mode")
+        }
+
+        XCTAssertEqual(journalMode?.lowercased(), "wal")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: databaseURL.path))
+        XCTAssertThrowsError(
+            try database.writer.write { db in
+                try db.execute(
+                    sql: """
+                        INSERT INTO tasks (
+                            id, title, task_day, status, priority, sort_order,
+                            created_at_ms, updated_at_ms
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                    arguments: [
+                        UUID().uuidString.lowercased(),
+                        "Invalid state",
+                        "2026-07-29",
+                        "completed",
+                        0,
+                        0,
+                        0,
+                        0,
+                    ]
+                )
+            }
         )
     }
 }

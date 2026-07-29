@@ -19,20 +19,49 @@ struct EmptyMenuBarContentLoader: MenuBarContentLoading {
 final class AppContainer {
     let clock: any Clock
     let menuBarContentLoader: any MenuBarContentLoading
+    let database: AppDatabase?
+    let startupError: AppError?
 
     init(
         clock: any Clock,
-        menuBarContentLoader: any MenuBarContentLoading
+        menuBarContentLoader: any MenuBarContentLoading,
+        database: AppDatabase? = nil,
+        startupError: AppError? = nil
     ) {
         self.clock = clock
         self.menuBarContentLoader = menuBarContentLoader
+        self.database = database
+        self.startupError = startupError
     }
 
     static func live() -> AppContainer {
-        AppContainer(
-            clock: SystemClock(),
-            menuBarContentLoader: EmptyMenuBarContentLoader()
-        )
+        do {
+            let paths = try AppDataDirectory().prepare()
+            let database = try AppDatabase.open(at: paths.databaseURL)
+            return AppContainer(
+                clock: SystemClock(),
+                menuBarContentLoader: EmptyMenuBarContentLoader(),
+                database: database
+            )
+        } catch {
+            let startupError = AppError(
+                code: "database_startup_failed",
+                userMessage: "Morae could not open its local data.",
+                recovery: "Check disk availability and folder permissions, then reopen Morae."
+            )
+            return AppContainer(
+                clock: SystemClock(),
+                menuBarContentLoader: StaticMenuBarContentLoader(
+                    message: [
+                        startupError.userMessage,
+                        startupError.recovery,
+                    ]
+                    .compactMap { $0 }
+                    .joined(separator: "\n")
+                ),
+                startupError: startupError
+            )
+        }
     }
 
     static func preview(
@@ -46,6 +75,14 @@ final class AppContainer {
 }
 
 private struct PreviewMenuBarContentLoader: MenuBarContentLoading {
+    let message: String
+
+    func execute() async -> MenuBarContent {
+        MenuBarContent(message: message)
+    }
+}
+
+private struct StaticMenuBarContentLoader: MenuBarContentLoading {
     let message: String
 
     func execute() async -> MenuBarContent {
