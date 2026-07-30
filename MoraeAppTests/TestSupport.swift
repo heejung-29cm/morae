@@ -1,6 +1,7 @@
 import Foundation
 import GRDB
 import MoraeCore
+import XCTest
 @testable import MoraeApp
 
 struct FixedClock: Clock {
@@ -57,6 +58,20 @@ enum FixtureError: Error, Equatable {
 }
 
 private final class FixtureBundleToken {}
+
+func XCTAssertThrowsErrorAsync<T>(
+    _ expression: @autoclosure () async throws -> T,
+    _ errorHandler: (Error) -> Void = { _ in },
+    file: StaticString = #filePath,
+    line: UInt = #line
+) async {
+    do {
+        _ = try await expression()
+        XCTFail("Expected expression to throw", file: file, line: line)
+    } catch {
+        errorHandler(error)
+    }
+}
 
 final class StubURLProtocol: URLProtocol, @unchecked Sendable {
     typealias Handler = @Sendable (URLRequest) throws -> (HTTPURLResponse, Data)
