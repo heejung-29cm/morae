@@ -1,9 +1,95 @@
 import Darwin
 import Foundation
 @testable import MoraeApp
+import MoraeCore
 import XCTest
 
 final class AgentSocketServerTests: XCTestCase {
+    func testFrameReaderAcceptsPartialReads() throws {
+        let descriptors = try socketPair()
+        defer {
+            close(descriptors.0)
+            close(descriptors.1)
+        }
+        let envelope = AgentTransportEnvelope(
+            source: .codex,
+            eventHint: "agent-turn-complete",
+            receivedAtMs: 123,
+            rawPayload: Data("{}".utf8)
+        )
+        let frame = try AgentFrameCodec.encode(envelope)
+        for byte in frame {
+            var byte = byte
+            XCTAssertEqual(Darwin.write(descriptors.0, &byte, 1), 1)
+        }
+
+        let received = try AgentSocketFrameReader(
+            expectedUserID: getuid()
+        ).read(from: descriptors.1)
+
+        XCTAssertEqual(received, envelope)
+    }
+
+    func testFrameReaderRejectsWrongPeerAndInvalidLengths() throws {
+        let wrongPeerDescriptors = try socketPair()
+        defer {
+            close(wrongPeerDescriptors.0)
+            close(wrongPeerDescriptors.1)
+        }
+        XCTAssertThrowsError(
+            try AgentSocketFrameReader(
+                expectedUserID: getuid() + 1
+            ).read(from: wrongPeerDescriptors.1)
+        ) { error in
+            XCTAssertEqual(
+                error as? AgentSocketFrameValidationError,
+                AgentSocketFrameValidationError(code: .peerRejected)
+            )
+        }
+
+        try assertRejectedHeader(
+            [0, 0, 0, 0],
+            expectedCode: .invalidPayload
+        )
+        try assertRejectedHeader(
+            [0, 16, 0, 1],
+            expectedCode: .payloadTooLarge
+        )
+    }
+
+    func testFrameReaderRejectsUnsupportedTransportVersion() throws {
+        let descriptors = try socketPair()
+        defer {
+            close(descriptors.0)
+            close(descriptors.1)
+        }
+        let frame = try AgentFrameCodec.encode(
+            AgentTransportEnvelope(
+                transportVersion: 2,
+                source: .claude,
+                eventHint: "Stop",
+                receivedAtMs: 123,
+                rawPayload: Data("{}".utf8)
+            )
+        )
+        _ = frame.withUnsafeBytes {
+            Darwin.write(descriptors.0, $0.baseAddress, frame.count)
+        }
+
+        XCTAssertThrowsError(
+            try AgentSocketFrameReader(
+                expectedUserID: getuid()
+            ).read(from: descriptors.1)
+        ) { error in
+            XCTAssertEqual(
+                error as? AgentSocketFrameValidationError,
+                AgentSocketFrameValidationError(
+                    code: .unsupportedTransport
+                )
+            )
+        }
+    }
+
     func testEndpointUsesPrivateDirectoryAndSocketPermissions() throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -125,5 +211,40 @@ final class AgentSocketServerTests: XCTestCase {
         var status = stat()
         XCTAssertEqual(lstat(url.path, &status), 0)
         return status.st_mode & 0o777
+    }
+
+    private func socketPair() throws -> (Int32, Int32) {
+        var descriptors: [Int32] = [-1, -1]
+        guard socketpair(AF_UNIX, SOCK_STREAM, 0, &descriptors) == 0
+        else {
+            throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno))
+        }
+        return (descriptors[0], descriptors[1])
+    }
+
+    private func assertRejectedHeader(
+        _ bytes: [UInt8],
+        expectedCode: AgentIngressErrorCode
+    ) throws {
+        let descriptors = try socketPair()
+        defer {
+            close(descriptors.0)
+            close(descriptors.1)
+        }
+        var bytes = bytes
+        XCTAssertEqual(
+            Darwin.write(descriptors.0, &bytes, bytes.count),
+            bytes.count
+        )
+        XCTAssertThrowsError(
+            try AgentSocketFrameReader(
+                expectedUserID: getuid()
+            ).read(from: descriptors.1)
+        ) { error in
+            XCTAssertEqual(
+                error as? AgentSocketFrameValidationError,
+                AgentSocketFrameValidationError(code: expectedCode)
+            )
+        }
     }
 }

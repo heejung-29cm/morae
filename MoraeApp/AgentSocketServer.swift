@@ -1,5 +1,6 @@
 import Darwin
 import Foundation
+import MoraeCore
 
 enum AgentSocketServerError: Error, Equatable {
     case alreadyRunning
@@ -16,6 +17,7 @@ final class AgentSocketServer: @unchecked Sendable {
 
     let endpointURL: URL
     private let endpoint: AgentSocketEndpoint
+    private let expectedUserID: uid_t
 
     private let queue: DispatchQueue
     private let workerQueue: DispatchQueue
@@ -32,6 +34,7 @@ final class AgentSocketServer: @unchecked Sendable {
         )
     ) {
         self.endpointURL = endpointURL
+        self.expectedUserID = expectedUserID
         endpoint = AgentSocketEndpoint(
             url: endpointURL,
             expectedUserID: expectedUserID
@@ -154,13 +157,96 @@ final class AgentSocketServer: @unchecked Sendable {
                 continue
             }
             workerQueue.async { [weak self] in
-                // Frame processing is added by S4-07.
+                if let self {
+                    _ = try? AgentSocketFrameReader(
+                        expectedUserID: self.expectedUserID
+                    ).read(from: connection)
+                }
                 close(connection)
                 self?.lock.withLock {
                     self?.activeConnectionCount -= 1
                 }
             }
         }
+    }
+}
+
+struct AgentSocketFrameValidationError: Error, Equatable {
+    let code: AgentIngressErrorCode
+}
+
+struct AgentSocketFrameReader {
+    let expectedUserID: uid_t
+
+    func read(from fileDescriptor: Int32) throws -> AgentTransportEnvelope {
+        var peerUserID: uid_t = 0
+        var peerGroupID: gid_t = 0
+        guard getpeereid(
+            fileDescriptor,
+            &peerUserID,
+            &peerGroupID
+        ) == 0, peerUserID == expectedUserID else {
+            throw AgentSocketFrameValidationError(code: .peerRejected)
+        }
+
+        let header = try readExactly(
+            AgentIPCContract.headerByteCount,
+            from: fileDescriptor
+        )
+        let bodyLength: Int
+        do {
+            bodyLength = try AgentFrameCodec.decodeBodyLength(from: header)
+        } catch let AgentFrameError.invalidBodyLength(length)
+            where length > AgentIPCContract.maximumFrameBodyByteCount {
+            throw AgentSocketFrameValidationError(code: .payloadTooLarge)
+        } catch {
+            throw AgentSocketFrameValidationError(code: .invalidPayload)
+        }
+        let body = try readExactly(bodyLength, from: fileDescriptor)
+        let envelope: AgentTransportEnvelope
+        do {
+            envelope = try AgentFrameCodec.decodeEnvelope(from: body)
+        } catch {
+            throw AgentSocketFrameValidationError(code: .invalidPayload)
+        }
+        guard envelope.transportVersion == AgentIPCContract.transportVersion
+        else {
+            throw AgentSocketFrameValidationError(
+                code: .unsupportedTransport
+            )
+        }
+        guard envelope.rawPayload.count
+            <= AgentIPCContract.maximumRawPayloadByteCount
+        else {
+            throw AgentSocketFrameValidationError(code: .payloadTooLarge)
+        }
+        return envelope
+    }
+
+    private func readExactly(
+        _ count: Int,
+        from fileDescriptor: Int32
+    ) throws -> Data {
+        var result = Data()
+        var buffer = [UInt8](repeating: 0, count: min(count, 8_192))
+        while result.count < count {
+            let requested = min(buffer.count, count - result.count)
+            let bytesRead = Darwin.read(
+                fileDescriptor,
+                &buffer,
+                requested
+            )
+            if bytesRead > 0 {
+                result.append(contentsOf: buffer.prefix(bytesRead))
+            } else if bytesRead < 0 && errno == EINTR {
+                continue
+            } else {
+                throw AgentSocketFrameValidationError(
+                    code: .invalidPayload
+                )
+            }
+        }
+        return result
     }
 }
 
