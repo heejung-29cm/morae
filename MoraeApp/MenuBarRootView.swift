@@ -71,13 +71,11 @@ struct MenuBarRootView: View {
     @Environment(\.openURL) private var openURL
     @State private var viewModel: MenuBarViewModel
     @State private var quickAddTitle = ""
-    @State private var priorityTitle = ""
     @State private var editingDraft: TodoEditDraft?
     @State private var draggedTodoID: TodoID?
     @State private var dropInsertion: TodoDropInsertion?
     @State private var todoRowFrames: [TodoID: CGRect] = [:]
     @FocusState private var isQuickAddFocused: Bool
-    @FocusState private var isPriorityPromptFocused: Bool
 
     init(container: AppContainer) {
         self.container = container
@@ -191,9 +189,6 @@ struct MenuBarRootView: View {
             .article,
             count: viewModel.briefingState.latestSuccess == nil ? "0" : "1"
         ) {
-            if viewModel.isPriorityPromptPresented {
-                priorityPrompt
-            }
             switch viewModel.briefingState {
             case let .idle(previous):
                 if let previous {
@@ -209,7 +204,7 @@ struct MenuBarRootView: View {
                 HStack(spacing: MoraeSpacing.small) {
                     ProgressView()
                         .controlSize(.small)
-                    Text("한 일과 할 일을 정리하고 아티클을 찾고 있습니다.")
+                    Text("새로운 아티클을 찾고 있습니다.")
                         .font(.system(size: 11.5))
                         .foregroundStyle(MoraeColor.secondaryForeground)
                 }
@@ -227,8 +222,6 @@ struct MenuBarRootView: View {
                 if let previous {
                     briefingSuccessContent(previous)
                         .opacity(0.72)
-                } else if let summary = failure.localTasks {
-                    localTaskSummary(summary)
                 }
                 MenuBarStateView(
                     kind: .error,
@@ -240,67 +233,10 @@ struct MenuBarRootView: View {
         }
     }
 
-    private var priorityPrompt: some View {
-        VStack(alignment: .leading, spacing: MoraeSpacing.regular) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("오늘 가장 중요한 일은 무엇인가요?")
-                    .font(.system(size: 12.5, weight: .semibold))
-                    .foregroundStyle(MoraeColor.foreground)
-                Text("선택 사항이며, 입력하면 중요 할 일로 저장합니다.")
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(MoraeColor.secondaryForeground)
-            }
-            TextField("가장 중요한 할 일", text: $priorityTitle)
-                .focused($isPriorityPromptFocused)
-                .moraeInput(isFocused: isPriorityPromptFocused)
-                .onSubmit {
-                    submitPriorityAndGenerate()
-                }
-                .onChange(of: priorityTitle) {
-                    viewModel.clearValidationMessage()
-                }
-            if let validationMessage = viewModel.validationMessage {
-                Text(validationMessage)
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(MoraeColor.error)
-            }
-            HStack(spacing: MoraeSpacing.compact) {
-                Spacer()
-                Button("건너뛰기") {
-                    priorityTitle = ""
-                    isPriorityPromptFocused = false
-                    Task {
-                        await viewModel.skipPriorityAndGenerate()
-                    }
-                }
-                .buttonStyle(MoraeCompactButtonStyle(variant: .chip))
-                Button("추가하고 생성") {
-                    submitPriorityAndGenerate()
-                }
-                .buttonStyle(
-                    MoraeCompactButtonStyle(variant: .prominent)
-                )
-            }
-        }
-        .padding(MoraeSpacing.medium)
-        .background(
-            MoraeColor.subtleFill,
-            in: RoundedRectangle(cornerRadius: MoraeRadius.medium)
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: MoraeRadius.medium)
-                .stroke(MoraeColor.accent.opacity(0.24), lineWidth: 0.5)
-        }
-        .onAppear {
-            isPriorityPromptFocused = true
-        }
-    }
-
     @ViewBuilder
     private func briefingSuccessContent(
         _ briefing: GeneratedBriefing
     ) -> some View {
-        localTaskSummary(briefing.localTasks)
         if let article = briefing.stored.article {
             articleCard(article)
         }
@@ -312,68 +248,6 @@ struct MenuBarRootView: View {
                 recovery: "실패한 피드는 이번 실행에서 재시도하지 않았습니다."
             )
         }
-    }
-
-    private func localTaskSummary(
-        _ summary: LocalTaskSummary
-    ) -> some View {
-        VStack(alignment: .leading, spacing: MoraeSpacing.regular) {
-            briefingTaskGroup(
-                title: "어제 한 일",
-                systemImage: "checkmark.circle.fill",
-                items: summary.yesterdayCompleted,
-                emptyText: "어제 완료한 일이 없습니다."
-            )
-            briefingTaskGroup(
-                title: "오늘 할 일",
-                systemImage: "circle",
-                items: summary.todayPending,
-                emptyText: "오늘 예정된 일이 없습니다."
-            )
-        }
-        .padding(MoraeSpacing.regular)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            MoraeColor.subtleFill,
-            in: RoundedRectangle(cornerRadius: MoraeRadius.medium)
-        )
-    }
-
-    private func briefingTaskGroup(
-        title: String,
-        systemImage: String,
-        items: [TodoItem],
-        emptyText: String
-    ) -> some View {
-        VStack(alignment: .leading, spacing: MoraeSpacing.compact) {
-            Text(title)
-                .font(.system(size: 11.5, weight: .semibold))
-                .foregroundStyle(MoraeColor.secondaryForeground)
-            if items.isEmpty {
-                Text(emptyText)
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(MoraeColor.mutedForeground)
-            } else {
-                ForEach(items.prefix(4)) { item in
-                    HStack(alignment: .firstTextBaseline, spacing: 7) {
-                        Image(systemName: systemImage)
-                            .font(.system(size: 10))
-                            .foregroundStyle(MoraeColor.accent)
-                        Text(item.title)
-                            .font(.system(size: 12))
-                            .foregroundStyle(MoraeColor.foreground)
-                            .lineLimit(2)
-                    }
-                }
-                if items.count > 4 {
-                    Text("외 \(items.count - 4)개")
-                        .font(.system(size: 11))
-                        .foregroundStyle(MoraeColor.mutedForeground)
-                        .padding(.leading, 17)
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func articleCard(_ article: Article) -> some View {
@@ -766,16 +640,6 @@ struct MenuBarRootView: View {
             if await viewModel.addTodo(title: title) {
                 quickAddTitle = ""
                 isQuickAddFocused = false
-            }
-        }
-    }
-
-    private func submitPriorityAndGenerate() {
-        let title = priorityTitle
-        Task {
-            if await viewModel.savePriorityAndGenerate(title: title) {
-                priorityTitle = ""
-                isPriorityPromptFocused = false
             }
         }
     }

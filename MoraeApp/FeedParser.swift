@@ -152,9 +152,7 @@ struct FeedMetadataParser: Sendable {
         guard let title else {
             return nil
         }
-        let normalizedTitle = title.trimmingCharacters(
-            in: .whitespacesAndNewlines
-        )
+        let normalizedTitle = normalizedTitle(title, source: source)
         guard (1...300).contains(normalizedTitle.count),
               !normalizedTitle.unicodeScalars.contains(where: {
                   CharacterSet.controlCharacters.contains($0)
@@ -180,5 +178,20 @@ struct FeedMetadataParser: Sendable {
             isOfficialSource: source.isOfficial,
             selectionWeight: source.selectionWeight
         )
+    }
+
+    private func normalizedTitle(
+        _ title: String,
+        source: FeedSource
+    ) -> String {
+        let title = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let sourcePrefix = "[Korean FE Article]"
+        guard source.name.caseInsensitiveCompare("Korean FE Article")
+                == .orderedSame,
+              title.lowercased().hasPrefix(sourcePrefix.lowercased()) else {
+            return title
+        }
+        return String(title.dropFirst(sourcePrefix.count))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

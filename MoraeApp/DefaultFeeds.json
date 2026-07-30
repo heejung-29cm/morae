@@ -4,27 +4,13 @@
     "name": "GeekNews",
     "feedURL": "https://news.hada.io/rss/news",
     "isOfficial": true,
-    "selectionWeight": 20
+    "selectionWeight": 40
   },
   {
-    "id": "7065e141-9c37-456c-84f5-a7d30a59bdcb",
-    "name": "FE News",
-    "feedURL": "https://fenews.substack.com/feed",
+    "id": "a00c4ed6-267b-4d55-9de8-313869eb156b",
+    "name": "Korean FE Article",
+    "feedURL": "https://kofearticle.substack.com/feed",
     "isOfficial": true,
-    "selectionWeight": 55
-  },
-  {
-    "id": "8c0c262f-f382-4fe4-a2a4-38c486b92055",
-    "name": "Frontend Focus",
-    "feedURL": "https://frontendfoc.us/rss/",
-    "isOfficial": true,
-    "selectionWeight": 45
-  },
-  {
-    "id": "50ee594a-9d5d-413e-88c8-25756a295def",
-    "name": "JavaScript Weekly",
-    "feedURL": "https://javascriptweekly.com/rss/",
-    "isOfficial": true,
-    "selectionWeight": 45
+    "selectionWeight": 60
   }
 ]

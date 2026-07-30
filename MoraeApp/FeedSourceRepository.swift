@@ -140,12 +140,24 @@ struct FeedSourceRecord:
 }
 
 final class GRDBFeedSourceRepository: FeedSourceRepository, @unchecked Sendable {
-    private static let seedKey = "default_feeds_seeded_v2"
-    private static let legacyDefaultIDs = [
+    private static let seedKey = "default_feeds_seeded_v3"
+    private static let retiredDefaultIDs = [
         "8b064c57-30c5-4b87-863f-edb32940237a",
         "97014c67-3ffe-4701-a792-c07dccbc0c3c",
         "8fa75519-5664-45ca-a687-5be871bb5f28",
         "b487dcfb-a5cd-4400-bf33-6da825f4db06",
+        "7065e141-9c37-456c-84f5-a7d30a59bdcb",
+        "8c0c262f-f382-4fe4-a2a4-38c486b92055",
+        "50ee594a-9d5d-413e-88c8-25756a295def",
+    ]
+    private static let retiredDefaultFeedURLs = [
+        "https://developer.mozilla.org/en-US/blog/rss.xml",
+        "https://web.dev/static/blog/feed.xml",
+        "https://developer.chrome.com/static/blog/feed.xml",
+        "https://react.dev/rss.xml",
+        "https://fenews.substack.com/feed",
+        "https://frontendfoc.us/rss/",
+        "https://javascriptweekly.com/rss/",
     ]
     private let writer: any DatabaseWriter
 
@@ -217,15 +229,26 @@ final class GRDBFeedSourceRepository: FeedSourceRepository, @unchecked Sendable 
                 UPDATE feed_sources
                 SET is_enabled = 0,
                     updated_at_ms = ?
-                WHERE id IN (?, ?, ?, ?)
+                WHERE id IN (?, ?, ?, ?, ?, ?, ?)
+                   OR feed_url IN (?, ?, ?, ?, ?, ?, ?)
                 """,
             arguments: [
                 sources.first?.updatedAt.unixMilliseconds
                     ?? Date().unixMilliseconds,
-                legacyDefaultIDs[0],
-                legacyDefaultIDs[1],
-                legacyDefaultIDs[2],
-                legacyDefaultIDs[3],
+                retiredDefaultIDs[0],
+                retiredDefaultIDs[1],
+                retiredDefaultIDs[2],
+                retiredDefaultIDs[3],
+                retiredDefaultIDs[4],
+                retiredDefaultIDs[5],
+                retiredDefaultIDs[6],
+                retiredDefaultFeedURLs[0],
+                retiredDefaultFeedURLs[1],
+                retiredDefaultFeedURLs[2],
+                retiredDefaultFeedURLs[3],
+                retiredDefaultFeedURLs[4],
+                retiredDefaultFeedURLs[5],
+                retiredDefaultFeedURLs[6],
             ]
         )
         for source in sources {

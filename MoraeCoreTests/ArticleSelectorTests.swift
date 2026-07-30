@@ -111,10 +111,74 @@ final class ArticleSelectorTests: XCTestCase {
         XCTAssertEqual(selected?.articleURL, curated.articleURL)
     }
 
+    func testArticlesOlderThanThirtyDaysAreExcluded() throws {
+        let stale = candidate(
+            path: "stale",
+            ageInDays: 31,
+            selectionWeight: 100
+        )
+        let fresh = candidate(
+            path: "fresh",
+            ageInDays: 10,
+            selectionWeight: 0
+        )
+
+        let selected = try ArticleSelector().select(
+            from: [stale, fresh],
+            interests: [],
+            readURLs: [],
+            recentlyRecommendedURLs: [],
+            now: now
+        )
+
+        XCTAssertEqual(selected?.articleURL, fresh.articleURL)
+    }
+
+    func testArticleWithoutPublishedDateIsExcluded() throws {
+        let undated = candidate(
+            path: "undated",
+            ageInDays: nil,
+            selectionWeight: 100
+        )
+
+        let selected = try ArticleSelector().select(
+            from: [undated],
+            interests: [],
+            readURLs: [],
+            recentlyRecommendedURLs: [],
+            now: now
+        )
+
+        XCTAssertNil(selected)
+    }
+
+    func testStaleDuplicateDoesNotHideEligibleVersion() throws {
+        let stale = candidate(
+            path: "same?utm_source=stale",
+            ageInDays: 31,
+            selectionWeight: 100
+        )
+        let fresh = candidate(
+            path: "same",
+            ageInDays: 10,
+            selectionWeight: 0
+        )
+
+        let selected = try ArticleSelector().select(
+            from: [stale, fresh],
+            interests: [],
+            readURLs: [],
+            recentlyRecommendedURLs: [],
+            now: now
+        )
+
+        XCTAssertEqual(selected?.articleURL, fresh.articleURL)
+    }
+
     private func candidate(
         path: String,
         title: String = "Article",
-        ageInDays: Int,
+        ageInDays: Int?,
         isOfficial: Bool = false,
         selectionWeight: Int = 0
     ) -> FeedCandidate {
@@ -124,9 +188,9 @@ final class ArticleSelectorTests: XCTestCase {
             sourceURL: URL(string: "https://source.invalid/feed")!,
             articleURL: URL(string: "https://example.com/\(path)")!,
             title: title,
-            publishedAt: now.addingTimeInterval(
-                -TimeInterval(ageInDays * 86_400)
-            ),
+            publishedAt: ageInDays.map {
+                now.addingTimeInterval(-TimeInterval($0 * 86_400))
+            },
             isOfficialSource: isOfficial,
             selectionWeight: selectionWeight
         )

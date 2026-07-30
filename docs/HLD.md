@@ -51,9 +51,10 @@ UI입니다. 아티클 영역은 기본 피드 seed, 제한된 HTTPS client, RSS
 메타데이터 파싱, URL 정규화·중복 제거·선정과 로컬 저장소까지
 구현됐습니다. 수동 브리핑은 사용자 버튼 동작에만 최대 4개 피드를
 조회하고 로컬 요약·추천 링크를 저장하며, 실패 시 자동 재시도하지 않고
-재시작 후 같은 날짜의 최신 결과를 복원합니다. 기본 소스는 GeekNews,
-FE News, Frontend Focus와 JavaScript Weekly이며 소스별 큐레이션
-가중치를 선정 점수에 반영합니다.
+재시작 후 같은 날짜의 최신 결과를 복원합니다. 오늘의 아티클 섹션에는
+할 일 요약을 중복 표시하지 않고 추천 링크만 표시합니다. 기본 소스는
+GeekNews와 Korean FE Article이며, 게시일이 있는 최근 30일의 개별 글만
+선정하고 소스별 큐레이션 가중치를 점수에 반영합니다.
 
 에이전트 IPC·알림, 설정과 배포는 Sprint 4~6에서 구현합니다. 앱 실행이나
 메뉴 열기만으로 피드 네트워크 요청이나 이벤트 수신을 시작하지 않습니다.
@@ -505,6 +506,7 @@ MVP는 외부 분석 SDK를 사용하지 않습니다.
 | [ADR-0011](adr/0011-soft-blue-native-menu-bar-visual-system.md) | 소프트 블루 기반 네이티브 메뉴 막대 시각 체계 |
 | [ADR-0012](adr/0012-idempotent-todo-carry-over.md) | provenance 기반 할 일 이월 중복 방지 |
 | [ADR-0013](adr/0013-curated-first-article-sources.md) | 큐레이션 우선 아티클 소스와 선정 가중치 |
+| [ADR-0014](adr/0014-individual-article-recommendations.md) | 신선한 개별 아티클 중심 추천과 아티클 전용 UI |
 
 ## 18. 확정된 추가 결정
 

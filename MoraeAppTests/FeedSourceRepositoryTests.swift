@@ -20,16 +20,14 @@ final class FeedSourceRepositoryTests: XCTestCase {
             sources.map(\.name),
             [
                 "GeekNews",
-                "FE News",
-                "Frontend Focus",
-                "JavaScript Weekly",
+                "Korean FE Article",
             ]
         )
         XCTAssertTrue(sources.allSatisfy(\.isOfficial))
         XCTAssertTrue(sources.allSatisfy { $0.feedURL.scheme == "https" })
         XCTAssertEqual(
             sources.map(\.selectionWeight),
-            [20, 55, 45, 45]
+            [40, 60]
         )
     }
 
@@ -71,7 +69,7 @@ final class FeedSourceRepositoryTests: XCTestCase {
         XCTAssertEqual(checkedSource?.lastCheckedAt, checkedAt)
     }
 
-    func testV2SeedDisablesLegacyDefaultsAndKeepsCustomSource()
+    func testV3SeedDisablesRetiredDefaultsAndKeepsCustomSource()
         async throws
     {
         let database = try AppDatabase.inMemory()
@@ -97,9 +95,18 @@ final class FeedSourceRepositoryTests: XCTestCase {
             createdAt: instant,
             updatedAt: instant
         )
+        let retiredNewsletter = FeedSource(
+            id: UUID(),
+            name: "Frontend Focus",
+            feedURL: URL(string: "https://frontendfoc.us/rss/")!,
+            isOfficial: true,
+            createdAt: instant,
+            updatedAt: instant
+        )
         try await database.writer.write { database in
             try FeedSourceRecord(source: legacy).insert(database)
             try FeedSourceRecord(source: custom).insert(database)
+            try FeedSourceRecord(source: retiredNewsletter).insert(database)
             try database.execute(
                 sql: """
                     INSERT INTO app_metadata (key, value)
@@ -123,11 +130,14 @@ final class FeedSourceRepositoryTests: XCTestCase {
         let enabled = try await repository.enabledSources()
         XCTAssertTrue(enabled.contains(where: { $0.name == "Custom" }))
         XCTAssertFalse(enabled.contains(where: { $0.name == "MDN Blog" }))
+        XCTAssertFalse(
+            enabled.contains(where: { $0.name == "Frontend Focus" })
+        )
         XCTAssertEqual(
             Set(enabled.map(\.name)).intersection(
-                ["GeekNews", "FE News", "Frontend Focus", "JavaScript Weekly"]
+                ["GeekNews", "Korean FE Article"]
             ),
-            ["GeekNews", "FE News", "Frontend Focus", "JavaScript Weekly"]
+            ["GeekNews", "Korean FE Article"]
         )
     }
 

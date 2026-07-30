@@ -230,51 +230,8 @@ final class GenerateBriefingTests: XCTestCase {
     }
 
     @MainActor
-    func testFirstBriefingPromptSavesImportantTodoBeforeGeneration()
-        async throws
-    {
-        let database = try AppDatabase.inMemory()
-        let repository = GRDBTodoRepository(database: database)
-        let generator = CountingResultBriefingGenerator(
-            result: .failed(
-                FailedBriefing(
-                    run: nil,
-                    localTasks: nil,
-                    code: .feedUnavailable,
-                    failedFeedCount: 0
-                )
-            )
-        )
-        let viewModel = MenuBarViewModel(
-            repository: repository,
-            briefingGenerator: generator,
-            clock: FixedClock(instant: Self.now),
-            uuidGenerator: SequenceUUIDGenerator(values: [UUID()]),
-            calendar: Self.calendar
-        )
-
-        await viewModel.requestBriefing()
-
-        XCTAssertTrue(viewModel.isPriorityPromptPresented)
-        let beforeSaveCount = await generator.requestCount()
-        XCTAssertEqual(beforeSaveCount, 0)
-
-        let saved = await viewModel.savePriorityAndGenerate(
-            title: "가장 중요한 일"
-        )
-
-        XCTAssertTrue(saved)
-        XCTAssertFalse(viewModel.isPriorityPromptPresented)
-        let afterSaveCount = await generator.requestCount()
-        XCTAssertEqual(afterSaveCount, 1)
-        let todos = try await repository.list(day: viewModel.today)
-        XCTAssertEqual(todos.count, 1)
-        XCTAssertEqual(todos.first?.title, "가장 중요한 일")
-        XCTAssertEqual(todos.first?.priority, .important)
-    }
-
-    @MainActor
-    func testFirstBriefingPromptCanBeSkipped() async throws {
+    func testBriefingRequestGeneratesImmediatelyWithoutAddingTodo()
+        async throws {
         let database = try AppDatabase.inMemory()
         let repository = GRDBTodoRepository(database: database)
         let generator = CountingResultBriefingGenerator(
@@ -295,9 +252,7 @@ final class GenerateBriefingTests: XCTestCase {
         )
 
         await viewModel.requestBriefing()
-        await viewModel.skipPriorityAndGenerate()
 
-        XCTAssertFalse(viewModel.isPriorityPromptPresented)
         let requestCount = await generator.requestCount()
         XCTAssertEqual(requestCount, 1)
         let todos = try await repository.list(day: viewModel.today)
@@ -306,7 +261,6 @@ final class GenerateBriefingTests: XCTestCase {
         await viewModel.requestBriefing()
         let secondRequestCount = await generator.requestCount()
         XCTAssertEqual(secondRequestCount, 2)
-        XCTAssertFalse(viewModel.isPriorityPromptPresented)
     }
 
     @MainActor
@@ -336,7 +290,8 @@ final class GenerateBriefingTests: XCTestCase {
             updatedAt: Self.restartNow
         )
         let feedClient = ScriptedFeedClient(
-            successfulSourceIDs: [source.id]
+            successfulSourceIDs: [source.id],
+            publishedAt: Self.restartNow
         )
 
         do {
@@ -574,10 +529,17 @@ private actor CountingFeedClient: FeedClient {
 
 private actor ScriptedFeedClient: FeedClient {
     private let successfulSourceIDs: Set<UUID>
+    private let publishedAt: Date
     private var counts: [UUID: Int] = [:]
 
-    init(successfulSourceIDs: Set<UUID>) {
+    init(
+        successfulSourceIDs: Set<UUID>,
+        publishedAt: Date = Date(
+            unixMilliseconds: 1_775_039_000_000
+        )
+    ) {
         self.successfulSourceIDs = successfulSourceIDs
+        self.publishedAt = publishedAt
     }
 
     func candidates(
@@ -596,9 +558,7 @@ private actor ScriptedFeedClient: FeedClient {
                     string: "https://articles.invalid/\(source.id)"
                 )!,
                 title: "Available article",
-                publishedAt: Date(
-                    unixMilliseconds: 1_775_039_000_000
-                ),
+                publishedAt: publishedAt,
                 isOfficialSource: source.isOfficial
             ),
         ]

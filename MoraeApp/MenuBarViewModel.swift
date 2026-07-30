@@ -44,7 +44,7 @@ extension BriefingErrorCode {
         case .noCandidates:
             "현재 피드에서 추천할 새 아티클을 찾지 못했습니다."
         case .feedUnavailable:
-            "로컬 한 일과 할 일은 정리했지만 아티클을 가져오지 못했습니다."
+            "이번 실행에서 아티클을 가져오지 못했습니다."
         case .persistenceFailed:
             "로컬 데이터 처리 중 문제가 발생했습니다."
         }
@@ -76,7 +76,6 @@ final class MenuBarViewModel {
     private(set) var deletionCandidate: TodoItem?
     private(set) var recentlyDeleted: TodoItem?
     private(set) var briefingState: BriefingViewState = .idle(previous: nil)
-    private(set) var isPriorityPromptPresented = false
 
     let today: LocalDay
     let yesterday: LocalDay
@@ -92,8 +91,6 @@ final class MenuBarViewModel {
     @ObservationIgnored
     nonisolated(unsafe) private var undoExpirationTask: Task<Void, Never>?
     private var didLoadLatestBriefing = false
-    private var hasBriefingRunToday = false
-    private var hasHandledPriorityPrompt = false
 
     init(
         repository: (any TodoRepository)?,
@@ -169,10 +166,8 @@ final class MenuBarViewModel {
 
         switch await briefingGenerator.execute(day: today) {
         case let .generated(briefing):
-            hasBriefingRunToday = true
             briefingState = .success(briefing)
         case let .failed(failure):
-            hasBriefingRunToday = failure.run != nil
             briefingState = .failure(failure, previous: previous)
         case .alreadyRunning:
             briefingState = .idle(previous: previous)
@@ -183,29 +178,6 @@ final class MenuBarViewModel {
         guard !briefingState.isLoading, briefingGenerator != nil else {
             return
         }
-        if !hasBriefingRunToday && !hasHandledPriorityPrompt {
-            isPriorityPromptPresented = true
-            return
-        }
-        await generateBriefing()
-    }
-
-    func savePriorityAndGenerate(title: String) async -> Bool {
-        guard isPriorityPromptPresented else { return false }
-        guard await addTodo(title: title, priority: .important) else {
-            return false
-        }
-        isPriorityPromptPresented = false
-        hasHandledPriorityPrompt = true
-        await generateBriefing()
-        return true
-    }
-
-    func skipPriorityAndGenerate() async {
-        guard isPriorityPromptPresented else { return }
-        isPriorityPromptPresented = false
-        hasHandledPriorityPrompt = true
-        validationMessage = nil
         await generateBriefing()
     }
 
@@ -458,8 +430,6 @@ final class MenuBarViewModel {
                 briefingState = .idle(previous: nil)
                 return
             }
-            hasBriefingRunToday = true
-            hasHandledPriorityPrompt = true
             let localTasks = try await BuildLocalTaskSummary(
                 repository: repository
             )

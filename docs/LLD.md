@@ -414,10 +414,12 @@ CREATE TABLE app_metadata (
 ```
 
 초기 공식 문서 피드 구성은 `default_feeds_seeded=1` marker를 사용했습니다.
-큐레이션 우선 구성은 `default_feeds_seeded_v2=1` marker를 사용합니다.
-v2를 처음 적용할 때 기존 네 기본 피드만 비활성화하고 새 큐레이션 피드를
-추가하며 사용자 정의 피드는 유지합니다. 사용자가 v2 기본 피드를 삭제한
-뒤 앱을 다시 실행해도 자동 복구하지 않습니다.
+뉴스레터 호 중심 구성을 거쳐, 개별 글 중심 구성은
+`default_feeds_seeded_v3=1` marker를 사용합니다. v3를 처음 적용할 때
+기존 공식 문서 피드와 FE News, Frontend Focus, JavaScript Weekly를
+비활성화하고 GeekNews와 Korean FE Article을 추가하며 사용자 정의 피드는
+유지합니다. 사용자가 v3 기본 피드를 삭제한 뒤 앱을 다시 실행해도 자동
+복구하지 않습니다.
 
 ### 6.4 `v4_feed_selection_weight`
 
@@ -428,7 +430,7 @@ ADD COLUMN selection_weight INTEGER NOT NULL DEFAULT 0
 ```
 
 큐레이션 서비스의 발행 빈도와 선별 밀도를 선정 점수에 반영합니다.
-0은 추가 선호가 없음을 뜻하며 기본 피드는 20...55 범위만 사용합니다.
+0은 추가 선호가 없음을 뜻하며 기본 피드는 40...60 범위만 사용합니다.
 
 ### 6.5 저장 형식
 
@@ -646,13 +648,13 @@ feed 요청의 ETag와 Last-Modified 처리는 URLSession/URLCache에 맡깁니�
 
 | 출처 | 피드 URL | selectionWeight |
 | --- | --- | ---: |
-| GeekNews | `https://news.hada.io/rss/news` | 20 |
-| FE News | `https://fenews.substack.com/feed` | 55 |
-| Frontend Focus | `https://frontendfoc.us/rss/` | 45 |
-| JavaScript Weekly | `https://javascriptweekly.com/rss/` | 45 |
+| GeekNews | `https://news.hada.io/rss/news` | 40 |
+| Korean FE Article | `https://kofearticle.substack.com/feed` | 60 |
 
-위 표의 세 번째 값은 `selectionWeight`입니다. GeekNews는 개별 토픽을,
-나머지 서비스는 큐레이션 호를 추천 단위로 사용합니다. MVP는 제목, 링크,
+위 표의 세 번째 값은 `selectionWeight`입니다. 두 소스 모두 뉴스레터의
+호 목록이 아니라 하나의 토픽 또는 작성·번역된 개별 글을 추천 단위로
+제공합니다. Korean FE Article 제목의 반복 접두어
+`[Korean FE Article]`은 화면 표시 전에 제거합니다. MVP는 제목, 링크,
 출처와 게시일만 표시하고 피드 본문·요약, 이미지, 로고와 아티클 원문은
 사용하지 않습니다. 기본 피드 fixture는 실제 콘텐츠를 복사하지 않고
 자체 제작합니다.
@@ -676,8 +678,11 @@ struct FeedCandidate: Hashable, Sendable {
 
 - article URL
 - trim 후 1...300자의 title
+- 게시일
 
-날짜 파싱이 실패해도 후보에는 포함하지만 freshness 점수는 0입니다.
+날짜 파싱이 실패한 항목과 실행 시점 기준 30일보다 오래된 항목은 선정
+후보에서 제외합니다. 피드 서버의 시계 오차를 고려해 미래 게시일은
+하루까지 허용합니다.
 
 ### 10.3 URL canonicalization
 
@@ -708,7 +713,10 @@ freshness:
 | 2~3일 | 40 |
 | 4~7일 | 30 |
 | 8~14일 | 15 |
-| 15일 이상/날짜 없음 | 0 |
+| 15~30일 | 0 |
+
+- 날짜 없음, 30일 초과, 하루보다 먼 미래 게시일은 점수 계산 전에
+  제외합니다.
 
 - interest는 title의 case-insensitive token match 비율로 계산합니다.
 - selectionWeight는 source 설정에서 후보로 전달하며 기본값은 0입니다.
@@ -1000,10 +1008,9 @@ enum BriefingViewState: Equatable {
 - retry 버튼은 표시하지 않습니다.
 - 이전 브리핑이 있으면 loading 중에도 흐리게 유지합니다.
 - 새 실행이 끝나면 같은 날짜의 최신 결과로 교체합니다.
-- 해당 날짜의 저장된 실행이 없을 때 첫 버튼 동작은 선택적인 최우선 할 일
-  질문을 표시하며 아직 피드를 조회하지 않습니다.
-- 답변은 `important` 할 일로 저장한 뒤 생성하고, 건너뛰기는 저장 없이
-  생성합니다. 같은 날짜의 다음 실행과 앱 재시작 후에는 질문하지 않습니다.
+- 버튼을 누르면 별도 질문 없이 브리핑 생성을 한 번 시작합니다.
+- 오늘의 아티클 섹션에는 추천 카드 또는 아티클 상태만 표시합니다.
+  로컬 할 일은 어제 완료와 오늘 할 일 섹션에서 독립적으로 표시합니다.
 
 ### 15.4 Todo 편집
 

@@ -1,6 +1,9 @@
 import Foundation
 
 public struct ArticleSelector: Sendable {
+    private static let maximumArticleAge: TimeInterval = 30 * 86_400
+    private static let futureDateTolerance: TimeInterval = 86_400
+
     private let deduplicator: FeedCandidateDeduplicator
     private let canonicalizer: URLCanonicalizer
 
@@ -19,7 +22,9 @@ public struct ArticleSelector: Sendable {
         recentlyRecommendedURLs: Set<URL>,
         now: Date
     ) throws -> FeedCandidate? {
-        let candidates = try deduplicator.deduplicate(candidates)
+        let candidates = try deduplicator.deduplicate(
+            candidates.filter { isEligible($0, now: now) }
+        )
         guard !candidates.isEmpty else {
             return nil
         }
@@ -92,6 +97,15 @@ public struct ArticleSelector: Sendable {
         case 8...14: 15
         default: 0
         }
+    }
+
+    private func isEligible(_ candidate: FeedCandidate, now: Date) -> Bool {
+        guard let publishedAt = candidate.publishedAt else {
+            return false
+        }
+        let age = now.timeIntervalSince(publishedAt)
+        return age >= -Self.futureDateTolerance
+            && age <= Self.maximumArticleAge
     }
 
     private func interestScore(_ title: String, interests: [String]) -> Int {

@@ -85,6 +85,32 @@ final class FeedParsingTests: XCTestCase {
         XCTAssertEqual(atom.count, 2)
     }
 
+    func testKoreanFEArticlePrefixIsRemovedFromTitle() throws {
+        let data = Data(
+            """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <rss version="2.0">
+              <channel>
+                <title>Korean FE Article</title>
+                <link>https://kofearticle.substack.com</link>
+                <item>
+                  <title>[Korean FE Article] 브라우저를 더 깊이 이해하기</title>
+                  <link>https://kofearticle.substack.com/p/browser</link>
+                  <pubDate>Thu, 30 Jul 2026 00:00:00 GMT</pubDate>
+                </item>
+              </channel>
+            </rss>
+            """.utf8
+        )
+
+        let candidates = try FeedMetadataParser().parseRSS(
+            data: data,
+            source: makeSource(name: "Korean FE Article")
+        )
+
+        XCTAssertEqual(candidates.first?.title, "브라우저를 더 깊이 이해하기")
+    }
+
     func testSprintTwoDemoDeterministicallySelectsOneMetadataCandidate() throws {
         let parser = FeedMetadataParser()
         let source = makeSource(name: "Official Fixture")

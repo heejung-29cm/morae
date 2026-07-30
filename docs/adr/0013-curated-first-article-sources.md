@@ -1,6 +1,6 @@
 # ADR-0013: 큐레이션 우선 아티클 소스와 선정 가중치
 
-- 상태: Accepted
+- 상태: Superseded by ADR-0014
 - 날짜: 2026-07-30
 
 ## Context
