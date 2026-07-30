@@ -1,6 +1,6 @@
 # 모래 MVP Sprint Tasks
 
-> 상태: Sprint 0~5 완료 / Sprint 6 준비 완료
+> 상태: Sprint 0~6 완료
 > 최종 수정: 2026-07-30
 > 기준 문서: [README](../README.md), [HLD](HLD.md), [LLD](LLD.md), [ADR](adr/)
 
@@ -39,7 +39,7 @@
 | Sprint 3.3 | 완료 | AI·FE 중심 제목 기반 주제 우선순위 |
 | Sprint 4 | 완료 | 안전한 Agent UDS 전송, best-effort CLI, ACK와 통합 테스트 |
 | Sprint 5 | 완료 | Agent 정규화·턴 연결·저장·알림·unread UI·90일 보존 |
-| Sprint 6 | 예정 | 설정·Hook 설치·개인정보 관리·배포 |
+| Sprint 6 | 완료 | 설정·Hook 설치·개인정보 관리·배포 |
 
 완료 표시는 현재 브랜치의 구현과 자동화 테스트를 기준으로 합니다. 후속
 Sprint용 DB 테이블과 empty state가 존재하더라도 실제 기능 연결 전에는
@@ -302,6 +302,21 @@ Sprint 종료 데모:
 - 개인정보 기본값이 모두 보수적으로 동작합니다.
 - README의 MVP 완료 조건 6개가 추적 가능한 증거와 함께 통과합니다.
 - 본인 전용 DMG를 macOS 14 환경에 설치해 실행할 수 있습니다.
+
+구현 결과(2026-07-30):
+
+- S6-01~S6-10을 설정 저장소와 다섯 탭 설정 화면에 연결했습니다.
+  malformed UserDefaults는 보수적 기본값으로 복구되며 관심사·사용자 피드,
+  개인정보·상세 알림·로그인 실행과 권한 복구 경로를 제공합니다.
+- 개인정보 opt-in 해제 시 선택한 기존 `agent_runs` column을 한
+  transaction에서 `NULL`로 scrub합니다. 기본 알림은 일반 문구만 쓰고
+  상세 알림은 명시적 opt-in과 길이 제한을 적용합니다.
+- 앱 타깃이 `hamster-event`를 번들 실행 파일로 포함하고 현재 앱 경로가
+  들어간 Codex/Claude snippet만 제공합니다. 외부 설정 파일은 수정하지
+  않습니다.
+- S6-11~S6-13의 자동 검증과 수동 설치 절차는
+  [Sprint 6 데모 체크리스트](SPRINT_6_DEMO_CHECKLIST.md)에 기록했고,
+  `scripts/build-personal-dmg.sh`가 로컬 서명 DMG를 생성합니다.
 
 ## 9. 요구사항 추적
 

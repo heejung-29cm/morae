@@ -2,7 +2,7 @@
 
 macOS 바탕화면에서 매일의 지식, 업무 계획, AI 에이전트 작업 상태를 한곳에 보여주는 개인 비서입니다. 마스코트는 움직이는 햄스터 캐릭터 "모래"입니다.
 
-> 문서 상태: MVP 사양 확정 / Sprint 0~5 구현 완료
+> 문서 상태: MVP 사양 확정 / Sprint 0~6 구현 완료
 > 최초 작성: 2026-07-24  
 > 최종 수정: 2026-07-30
 > 코드네임: Hamster Bot (제품명 "모래"로 확정, bundle ID 등 식별자는 로마자 슬러그 `morae` 사용)
@@ -17,11 +17,12 @@ macOS 바탕화면에서 매일의 지식, 업무 계획, AI 에이전트 작업
 - [Sprint 3 Demo Checklist](docs/SPRINT_3_DEMO_CHECKLIST.md)
 - [Sprint 4 Demo Checklist](docs/SPRINT_4_DEMO_CHECKLIST.md)
 - [Sprint 5 Demo Checklist](docs/SPRINT_5_DEMO_CHECKLIST.md)
+- [Sprint 6 Demo Checklist](docs/SPRINT_6_DEMO_CHECKLIST.md)
 - [Architecture Decision Records](docs/adr/)
 
 ## 현재 구현 상태
 
-2026-07-30 기준으로 Sprint 0부터 Sprint 5까지 구현됐습니다.
+2026-07-30 기준으로 Sprint 0부터 Sprint 6까지 구현됐습니다.
 
 - macOS 14 이상을 대상으로 하는 `MenuBarExtra(.window)` 앱과 로컬 SQLite
   저장소가 동작합니다.
@@ -58,13 +59,16 @@ macOS 바탕화면에서 매일의 지식, 업무 계획, AI 에이전트 작업
 - 사용자가 메뉴에서 명시적으로 허용한 경우에만 source/status로 구성된
   일반화된 macOS 알림을 보냅니다. 기본 개인정보 저장 설정은 모두
   꺼져 있고 원본 Hook payload는 DB에 저장하지 않습니다.
-- 전체 scheme의 자동화 테스트는 121개입니다 (`MoraeApp` 79개,
+- 설정에서 관심사와 피드를 관리하고, 개인정보 저장·상세 알림·로그인 시
+  실행을 명시적으로 선택할 수 있습니다. 개인정보 저장을 끄면 해당 기존
+  DB column도 한 transaction에서 영구 삭제됩니다.
+- 앱 번들에 `hamster-event`가 포함되며 설정 화면에서 현재 절대 경로가
+  반영된 Codex/Claude snippet을 복사할 수 있습니다. 외부 설정 파일은
+  앱이 수정하지 않습니다.
+- 본인 전용 ad-hoc 서명 DMG 생성 스크립트와 Sprint 6 인수 체크리스트가
+  제공됩니다.
+- 전체 scheme의 자동화 테스트는 126개입니다 (`MoraeApp` 84개,
   `MoraeCore` 32개, `HamsterEventCLI` 10개).
-
-Codex/Claude 설정 파일을 앱에서 자동 편집하거나 helper를 앱 번들에
-패키징하는 설정·배포 흐름은 Sprint 6 범위입니다. Sprint 5 기능은 빌드된
-`hamster-event`로 직접 확인할 수 있습니다. 상세 진행 상태는
-[MVP Sprint Tasks](docs/SPRINT_TASKS.md)를 기준으로 합니다.
 
 ## 1. 제품 목표
 
