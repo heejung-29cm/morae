@@ -4,6 +4,8 @@ import Foundation
 enum AgentSocketServerError: Error, Equatable {
     case alreadyRunning
     case endpointPreparationFailed
+    case unsafeParentDirectory
+    case unsafeEndpoint
     case socketCreationFailed
     case bindFailed
     case listenFailed
@@ -13,6 +15,7 @@ final class AgentSocketServer: @unchecked Sendable {
     static let maximumConcurrentConnections = 8
 
     let endpointURL: URL
+    private let endpoint: AgentSocketEndpoint
 
     private let queue: DispatchQueue
     private let workerQueue: DispatchQueue
@@ -23,11 +26,16 @@ final class AgentSocketServer: @unchecked Sendable {
 
     init(
         endpointURL: URL,
+        expectedUserID: uid_t = getuid(),
         queue: DispatchQueue = DispatchQueue(
             label: "io.github.heejung-29cm.morae.agent-socket"
         )
     ) {
         self.endpointURL = endpointURL
+        endpoint = AgentSocketEndpoint(
+            url: endpointURL,
+            expectedUserID: expectedUserID
+        )
         self.queue = queue
         workerQueue = DispatchQueue(
             label: "io.github.heejung-29cm.morae.agent-socket.worker",
@@ -48,7 +56,7 @@ final class AgentSocketServer: @unchecked Sendable {
         guard !isRunning else {
             throw AgentSocketServerError.alreadyRunning
         }
-        try prepareEndpoint()
+        try endpoint.prepare()
 
         let fileDescriptor = socket(AF_UNIX, SOCK_STREAM, 0)
         guard fileDescriptor >= 0 else {
@@ -58,7 +66,7 @@ final class AgentSocketServer: @unchecked Sendable {
             try bindAndListen(fileDescriptor)
         } catch {
             close(fileDescriptor)
-            try? FileManager.default.removeItem(at: endpointURL)
+            endpoint.removeIfOwnedSocket()
             throw error
         }
 
@@ -88,22 +96,7 @@ final class AgentSocketServer: @unchecked Sendable {
             shutdown(state.0, SHUT_RDWR)
             close(state.0)
         }
-        try? FileManager.default.removeItem(at: endpointURL)
-    }
-
-    private func prepareEndpoint() throws {
-        let parent = endpointURL.deletingLastPathComponent()
-        do {
-            try FileManager.default.createDirectory(
-                at: parent,
-                withIntermediateDirectories: true
-            )
-            if FileManager.default.fileExists(atPath: endpointURL.path) {
-                try FileManager.default.removeItem(at: endpointURL)
-            }
-        } catch {
-            throw AgentSocketServerError.endpointPreparationFailed
-        }
+        endpoint.removeIfOwnedSocket()
     }
 
     private func bindAndListen(_ fileDescriptor: Int32) throws {
@@ -129,6 +122,9 @@ final class AgentSocketServer: @unchecked Sendable {
         }
         guard result == 0 else {
             throw AgentSocketServerError.bindFailed
+        }
+        guard chmod(endpointURL.path, 0o600) == 0 else {
+            throw AgentSocketServerError.endpointPreparationFailed
         }
         guard listen(fileDescriptor, SOMAXCONN) == 0 else {
             throw AgentSocketServerError.listenFailed
@@ -165,6 +161,75 @@ final class AgentSocketServer: @unchecked Sendable {
                 }
             }
         }
+    }
+}
+
+struct AgentSocketEndpoint {
+    let url: URL
+    let expectedUserID: uid_t
+
+    static func defaultURL(
+        temporaryDirectory: URL = FileManager.default.temporaryDirectory,
+        userID: uid_t = getuid()
+    ) -> URL {
+        temporaryDirectory
+            .appendingPathComponent("morae-\(userID)", isDirectory: true)
+            .appendingPathComponent("event.sock")
+    }
+
+    func prepare() throws {
+        let parentPath = url.deletingLastPathComponent().path
+        var parentStatus = stat()
+        if lstat(parentPath, &parentStatus) == 0 {
+            guard fileType(parentStatus.st_mode) == S_IFDIR,
+                  parentStatus.st_uid == expectedUserID
+            else {
+                throw AgentSocketServerError.unsafeParentDirectory
+            }
+        } else if errno == ENOENT {
+            do {
+                try FileManager.default.createDirectory(
+                    at: url.deletingLastPathComponent(),
+                    withIntermediateDirectories: true
+                )
+            } catch {
+                throw AgentSocketServerError.endpointPreparationFailed
+            }
+        } else {
+            throw AgentSocketServerError.endpointPreparationFailed
+        }
+        guard chmod(parentPath, 0o700) == 0 else {
+            throw AgentSocketServerError.endpointPreparationFailed
+        }
+
+        var endpointStatus = stat()
+        if lstat(url.path, &endpointStatus) == 0 {
+            guard fileType(endpointStatus.st_mode) == S_IFSOCK,
+                  endpointStatus.st_uid == expectedUserID
+            else {
+                throw AgentSocketServerError.unsafeEndpoint
+            }
+            guard unlink(url.path) == 0 else {
+                throw AgentSocketServerError.endpointPreparationFailed
+            }
+        } else if errno != ENOENT {
+            throw AgentSocketServerError.endpointPreparationFailed
+        }
+    }
+
+    func removeIfOwnedSocket() {
+        var status = stat()
+        guard lstat(url.path, &status) == 0,
+              fileType(status.st_mode) == S_IFSOCK,
+              status.st_uid == expectedUserID
+        else {
+            return
+        }
+        unlink(url.path)
+    }
+
+    private func fileType(_ mode: mode_t) -> mode_t {
+        mode & S_IFMT
     }
 }
 
