@@ -2,6 +2,54 @@ import MoraeCore
 import XCTest
 
 final class HamsterEventCLITests: XCTestCase {
+    func testResolvesPerUserSocketLocation() {
+        let url = AgentSocketLocation.url(
+            temporaryDirectory: URL(fileURLWithPath: "/tmp"),
+            userID: 501
+        )
+
+        XCTAssertEqual(url.path, "/tmp/morae-501/event.sock")
+    }
+
+    func testDecodesValidSuccessAndFailureAcknowledgements() throws {
+        let eventID = UUID()
+        let success = try AgentAckDecoder.decode(
+            JSONEncoder().encode(AgentIngressAck.success(eventID: eventID))
+        )
+        let failure = try AgentAckDecoder.decode(
+            JSONEncoder().encode(
+                AgentIngressAck.failure(.unsupportedEvent)
+            )
+        )
+
+        XCTAssertEqual(success, .success(eventID: eventID))
+        XCTAssertEqual(failure, .failure(.unsupportedEvent))
+    }
+
+    func testRejectsMalformedOrSemanticallyInvalidAcknowledgement() throws {
+        XCTAssertThrowsError(try AgentAckDecoder.decode(Data("{}".utf8)))
+        XCTAssertThrowsError(
+            try AgentAckDecoder.decode(
+                JSONEncoder().encode(
+                    AgentIngressAck(ok: true, eventID: nil, code: nil)
+                )
+            )
+        )
+    }
+
+    func testDeadlineSharesOneMonotonicBudget() throws {
+        var now = 10.0
+        let deadline = AgentDeadline(duration: 0.9, now: { now })
+        let initialRemaining = try deadline.remainingMilliseconds()
+        XCTAssertTrue((899...901).contains(initialRemaining))
+
+        now = 10.7
+        let laterRemaining = try deadline.remainingMilliseconds()
+        XCTAssertTrue((199...201).contains(laterRemaining))
+        now = 10.91
+        XCTAssertThrowsError(try deadline.remainingMilliseconds())
+    }
+
     func testParsesCodexArgumentWithoutReadingStandardInput() throws {
         var didReadStandardInput = false
         let payload = #"{"type":"agent-turn-complete"}"#
