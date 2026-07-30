@@ -111,7 +111,9 @@ final class FeedParsingTests: XCTestCase {
         XCTAssertEqual(candidates.first?.title, "브라우저를 더 깊이 이해하기")
     }
 
-    func testSprintTwoDemoDeterministicallySelectsOneMetadataCandidate() throws {
+    func testSprintTwoDemoDeterministicallySelectsPreferredMetadataCandidate()
+        throws
+    {
         let parser = FeedMetadataParser()
         let source = makeSource(name: "Official Fixture")
         let rss = try parser.parse(
@@ -128,24 +130,24 @@ final class FeedParsingTests: XCTestCase {
 
         let selected = try selector.select(
             from: candidates,
-            interests: ["Swift", "concurrency"],
+            interests: [],
             readURLs: [],
             recentlyRecommendedURLs: [],
             now: now
         )
         let selectedFromReversedInput = try selector.select(
             from: Array(candidates.reversed()),
-            interests: ["Swift", "concurrency"],
+            interests: [],
             readURLs: [],
             recentlyRecommendedURLs: [],
             now: now
         )
 
         XCTAssertEqual(selected, selectedFromReversedInput)
-        XCTAssertEqual(selected?.title, "Swift concurrency patterns")
+        XCTAssertEqual(selected?.title, "Web platform updates")
         XCTAssertEqual(
             selected?.articleURL.absoluteString,
-            "https://fixture.invalid/articles/concurrency"
+            "https://fixture.invalid/articles/platform"
         )
         XCTAssertEqual(selected?.sourceName, "Official Fixture")
         XCTAssertEqual(

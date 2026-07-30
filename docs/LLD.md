@@ -698,6 +698,7 @@ struct FeedCandidate: Hashable, Sendable {
 ```text
 score =
     freshness(0...50)
+  + topicPriority(0, 20, 45, or 120)
   + interestMatch(0...25)
   + officialSource(0 or 15)
   + selectionWeight(0...100)
@@ -718,6 +719,20 @@ freshness:
 - 날짜 없음, 30일 초과, 하루보다 먼 미래 게시일은 점수 계산 전에
   제외합니다.
 
+- topicPriority:
+
+  | 우선순위 | 점수 | 제목 분류 예시 |
+  | --- | ---: | --- |
+  | AI·프론트엔드 | 120 | AI, LLM, agent, MCP, browser, web, React, JavaScript, CSS |
+  | 협업 | 45 | collaboration, team, code review, developer experience, 생산성 |
+  | 인프라·데이터 | 20 | cloud, Kubernetes, observability, database, data |
+  | 기타 | 0 | 위 키워드에 해당하지 않는 제목 |
+
+- 둘 이상의 분류에 해당하면 가장 높은 점수 하나만 사용합니다.
+- 영문 키워드에 한글 조사가 붙은 경우(`AI로`, `React를`)도 영문
+  토큰으로 분리합니다.
+- 이 분류는 제목 메타데이터만 사용합니다. 본문 의미 분석이나 외부 AI
+  API 호출은 하지 않습니다.
 - interest는 title의 case-insensitive token match 비율로 계산합니다.
 - selectionWeight는 source 설정에서 후보로 전달하며 기본값은 0입니다.
 - 최근 90일 추천 URL에는 60점 감점합니다.
