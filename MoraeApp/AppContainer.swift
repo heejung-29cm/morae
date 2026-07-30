@@ -25,6 +25,7 @@ final class AppContainer {
     let feedSourceRepository: (any FeedSourceRepository)?
     let articleRepository: (any ArticleRepository)?
     let briefingRepository: (any BriefingRepository)?
+    let generateBriefing: GenerateBriefing?
     let startupError: AppError?
 
     init(
@@ -36,6 +37,7 @@ final class AppContainer {
         feedSourceRepository: (any FeedSourceRepository)? = nil,
         articleRepository: (any ArticleRepository)? = nil,
         briefingRepository: (any BriefingRepository)? = nil,
+        generateBriefing: GenerateBriefing? = nil,
         startupError: AppError? = nil
     ) {
         self.clock = clock
@@ -46,6 +48,7 @@ final class AppContainer {
         self.feedSourceRepository = feedSourceRepository
         self.articleRepository = articleRepository
         self.briefingRepository = briefingRepository
+        self.generateBriefing = generateBriefing
         self.startupError = startupError
     }
 
@@ -53,22 +56,39 @@ final class AppContainer {
         do {
             let paths = try AppDataDirectory().prepare()
             let database = try AppDatabase.open(at: paths.databaseURL)
+            let clock = SystemClock()
+            let uuidGenerator = SystemUUIDGenerator()
+            let todoRepository = GRDBTodoRepository(database: database)
             let feedSourceRepository = GRDBFeedSourceRepository(database: database)
-            let now = SystemClock().now()
+            let articleRepository = GRDBArticleRepository(
+                database: database,
+                clock: clock
+            )
+            let briefingRepository = GRDBBriefingRepository(
+                database: database,
+                uuidGenerator: uuidGenerator
+            )
+            let now = clock.now()
             let defaultFeeds = try DefaultFeedLoader.load(at: now)
             try feedSourceRepository.seedDefaultsSynchronously(defaultFeeds)
             return AppContainer(
-                clock: SystemClock(),
+                clock: clock,
+                uuidGenerator: uuidGenerator,
                 menuBarContentLoader: EmptyMenuBarContentLoader(),
                 database: database,
-                todoRepository: GRDBTodoRepository(database: database),
+                todoRepository: todoRepository,
                 feedSourceRepository: feedSourceRepository,
-                articleRepository: GRDBArticleRepository(
-                    database: database,
-                    clock: SystemClock()
-                ),
-                briefingRepository: GRDBBriefingRepository(
-                    database: database
+                articleRepository: articleRepository,
+                briefingRepository: briefingRepository,
+                generateBriefing: GenerateBriefing(
+                    todoRepository: todoRepository,
+                    feedSourceRepository: feedSourceRepository,
+                    feedClient: LiveFeedClient(),
+                    articleRepository: articleRepository,
+                    briefingRepository: briefingRepository,
+                    preferences: UserDefaultsBriefingPreferences(),
+                    clock: clock,
+                    uuidGenerator: uuidGenerator
                 )
             )
         } catch {
