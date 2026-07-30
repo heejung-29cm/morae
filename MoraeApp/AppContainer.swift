@@ -24,6 +24,7 @@ final class AppContainer {
     let todoRepository: (any TodoRepository)?
     let feedSourceRepository: (any FeedSourceRepository)?
     let articleRepository: (any ArticleRepository)?
+    let briefingRepository: (any BriefingRepository)?
     let startupError: AppError?
 
     init(
@@ -34,6 +35,7 @@ final class AppContainer {
         todoRepository: (any TodoRepository)? = nil,
         feedSourceRepository: (any FeedSourceRepository)? = nil,
         articleRepository: (any ArticleRepository)? = nil,
+        briefingRepository: (any BriefingRepository)? = nil,
         startupError: AppError? = nil
     ) {
         self.clock = clock
@@ -43,6 +45,7 @@ final class AppContainer {
         self.todoRepository = todoRepository
         self.feedSourceRepository = feedSourceRepository
         self.articleRepository = articleRepository
+        self.briefingRepository = briefingRepository
         self.startupError = startupError
     }
 
@@ -63,6 +66,9 @@ final class AppContainer {
                 articleRepository: GRDBArticleRepository(
                     database: database,
                     clock: SystemClock()
+                ),
+                briefingRepository: GRDBBriefingRepository(
+                    database: database
                 )
             )
         } catch {

@@ -95,3 +95,31 @@ public struct Article: Identifiable, Equatable, Sendable {
         self.updatedAt = updatedAt
     }
 }
+
+public struct BriefingRun: Identifiable, Equatable, Sendable {
+    public let id: BriefingRunID
+    public let day: LocalDay
+    public var status: BriefingStatus
+    public var selectedArticleID: ArticleID?
+    public let triggeredAt: Date
+    public var finishedAt: Date?
+    public var errorCode: BriefingErrorCode?
+
+    public init(
+        id: BriefingRunID,
+        day: LocalDay,
+        status: BriefingStatus,
+        selectedArticleID: ArticleID? = nil,
+        triggeredAt: Date,
+        finishedAt: Date? = nil,
+        errorCode: BriefingErrorCode? = nil
+    ) {
+        self.id = id
+        self.day = day
+        self.status = status
+        self.selectedArticleID = selectedArticleID
+        self.triggeredAt = triggeredAt
+        self.finishedAt = finishedAt
+        self.errorCode = errorCode
+    }
+}
