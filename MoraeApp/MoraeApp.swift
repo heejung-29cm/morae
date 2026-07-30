@@ -5,8 +5,15 @@ struct MoraeApp: App {
     private let container = AppContainer.live()
 
     var body: some Scene {
-        MenuBarExtra("모래", systemImage: "hourglass") {
+        MenuBarExtra {
             MenuBarRootView(container: container)
+        } label: {
+            Label(
+                "모래",
+                systemImage: container.agentActivity?.hasUnread == true
+                    ? "hourglass.bottomhalf.filled"
+                    : "hourglass"
+            )
         }
         .menuBarExtraStyle(.window)
 

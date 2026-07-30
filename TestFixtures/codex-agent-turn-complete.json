@@ -1,0 +1,5 @@
+{
+  "type": "agent-turn-complete",
+  "thread-id": "codex-session-fixture",
+  "turn-id": "codex-turn-fixture"
+}

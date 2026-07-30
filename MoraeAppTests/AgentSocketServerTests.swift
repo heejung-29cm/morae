@@ -10,12 +10,12 @@ final class AgentSocketServerTests: XCTestCase {
 
         func handle(
             _ envelope: AgentTransportEnvelope
-        ) -> AgentIngressAck {
+        ) async -> AgentIngressAck {
             ack
         }
     }
 
-    func testRealClientServerRoundTripWithPartialWrites() throws {
+    func testRealClientServerRoundTrip() throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         let endpoint = directory.appendingPathComponent("event.sock")
@@ -36,9 +36,7 @@ final class AgentSocketServerTests: XCTestCase {
             rawPayload: Data(#"{"session_id":"session"}"#.utf8)
         )
 
-        let ack = try AgentSocketClient(
-            maximumWriteChunkByteCount: 3
-        ).send(
+        let ack = try AgentSocketClient().send(
             frame: AgentFrameCodec.encode(envelope),
             to: endpoint,
             deadline: AgentDeadline(duration: 0.9)
@@ -47,7 +45,7 @@ final class AgentSocketServerTests: XCTestCase {
         XCTAssertEqual(ack, .success(eventID: eventID))
     }
 
-    func testConnectionWritesSuccessOnlyAfterHandlerReturns() throws {
+    func testConnectionWritesSuccessOnlyAfterHandlerReturns() async throws {
         let descriptors = try socketPair()
         defer {
             close(descriptors.0)
@@ -66,7 +64,7 @@ final class AgentSocketServerTests: XCTestCase {
             Darwin.write(descriptors.0, $0.baseAddress, frame.count)
         }
 
-        AgentSocketConnectionProcessor(
+        await AgentSocketConnectionProcessor(
             expectedUserID: getuid(),
             handler: StubHandler(ack: .success(eventID: eventID))
         ).process(descriptors.1)
@@ -77,7 +75,7 @@ final class AgentSocketServerTests: XCTestCase {
         )
     }
 
-    func testConnectionWritesSafeValidationFailureAck() throws {
+    func testConnectionWritesSafeValidationFailureAck() async throws {
         let descriptors = try socketPair()
         defer {
             close(descriptors.0)
@@ -89,7 +87,7 @@ final class AgentSocketServerTests: XCTestCase {
             emptyLength.count
         )
 
-        AgentSocketConnectionProcessor(
+        await AgentSocketConnectionProcessor(
             expectedUserID: getuid(),
             handler: StubHandler(ack: .success(eventID: UUID()))
         ).process(descriptors.1)

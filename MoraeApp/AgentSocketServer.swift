@@ -189,15 +189,19 @@ final class AgentSocketServer: @unchecked Sendable {
                 continue
             }
             workerQueue.async { [weak self] in
-                if let self {
-                    AgentSocketConnectionProcessor(
+                guard let self else {
+                    close(connection)
+                    return
+                }
+                Task {
+                    await AgentSocketConnectionProcessor(
                         expectedUserID: self.expectedUserID,
                         handler: self.handler
                     ).process(connection)
-                }
-                close(connection)
-                self?.lock.withLock {
-                    self?.activeConnectionCount -= 1
+                    close(connection)
+                    self.lock.withLock {
+                        self.activeConnectionCount -= 1
+                    }
                 }
             }
         }
@@ -205,11 +209,15 @@ final class AgentSocketServer: @unchecked Sendable {
 }
 
 protocol AgentEnvelopeHandling: Sendable {
-    func handle(_ envelope: AgentTransportEnvelope) -> AgentIngressAck
+    func handle(
+        _ envelope: AgentTransportEnvelope
+    ) async -> AgentIngressAck
 }
 
 struct RejectingAgentEnvelopeHandler: AgentEnvelopeHandling {
-    func handle(_ envelope: AgentTransportEnvelope) -> AgentIngressAck {
+    func handle(
+        _ envelope: AgentTransportEnvelope
+    ) async -> AgentIngressAck {
         .failure(.unsupportedEvent)
     }
 }
@@ -218,7 +226,7 @@ struct AgentSocketConnectionProcessor {
     let expectedUserID: uid_t
     let handler: any AgentEnvelopeHandling
 
-    func process(_ fileDescriptor: Int32) {
+    func process(_ fileDescriptor: Int32) async {
         var receiveTimeout = timeval(tv_sec: 1, tv_usec: 0)
         setsockopt(
             fileDescriptor,
@@ -232,7 +240,7 @@ struct AgentSocketConnectionProcessor {
             let envelope = try AgentSocketFrameReader(
                 expectedUserID: expectedUserID
             ).read(from: fileDescriptor)
-            ack = handler.handle(envelope)
+            ack = await handler.handle(envelope)
         } catch let error as AgentSocketFrameValidationError {
             ack = .failure(error.code)
         } catch {

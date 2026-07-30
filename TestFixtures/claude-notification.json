@@ -1,0 +1,7 @@
+{
+  "session_id": "claude-session-fixture",
+  "prompt_id": "claude-turn-fixture",
+  "hook_event_name": "Notification",
+  "notification_type": "agent_needs_input",
+  "message": "fixture-message"
+}

@@ -65,6 +65,12 @@ private struct TodoRowFramePreferenceKey: PreferenceKey {
     }
 }
 
+private struct AgentRunGroup: Identifiable {
+    let id: String
+    let title: String
+    let runs: [AgentRun]
+}
+
 @MainActor
 struct MenuBarRootView: View {
     let container: AppContainer
@@ -104,7 +110,7 @@ struct MenuBarRootView: View {
                         articleSection
                         yesterdaySection
                         todaySection
-                        emptySection(.recentAgents, count: nil)
+                        agentSection
                     }
                 }
                 .padding(.horizontal, MoraeSpacing.compact)
@@ -117,9 +123,15 @@ struct MenuBarRootView: View {
         .tint(MoraeColor.accent)
         .task {
             await viewModel.onAppear()
+            container.agentActivity?.setVisible(true)
+            if let notifier = container.agentNotifier {
+                await container.agentActivity?
+                    .refreshNotificationAuthorization(notifier: notifier)
+            }
         }
         .onDisappear {
             viewModel.onDisappear()
+            container.agentActivity?.setVisible(false)
         }
     }
 
@@ -642,6 +654,179 @@ struct MenuBarRootView: View {
                 isQuickAddFocused = false
             }
         }
+    }
+
+    private var agentSection: some View {
+        let runs = container.agentActivity?.runs ?? []
+        return sectionContainer(.recentAgents, count: String(runs.count)) {
+            if let errorMessage = container.agentActivity?.errorMessage {
+                MenuBarStateView(
+                    kind: .error,
+                    title: "기록을 표시하지 못했습니다",
+                    message: errorMessage
+                )
+            } else if runs.isEmpty {
+                emptyMessage(for: .recentAgents)
+            } else {
+                VStack(alignment: .leading, spacing: MoraeSpacing.regular) {
+                    ForEach(agentRunGroups(for: runs)) { group in
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text(group.title)
+                                .font(.system(size: 10.5, weight: .semibold))
+                                .foregroundStyle(MoraeColor.mutedForeground)
+                                .padding(.horizontal, MoraeSpacing.regular)
+                                .padding(.bottom, MoraeSpacing.xSmall)
+                            ForEach(Array(group.runs.enumerated()), id: \.element.id) {
+                                index,
+                                run in
+                                if index > 0 {
+                                    Rectangle()
+                                        .fill(MoraeColor.separator)
+                                        .frame(height: 0.5)
+                                        .padding(.leading, 38)
+                                }
+                                agentRow(run)
+                            }
+                        }
+                    }
+                }
+            }
+            if let notifier = container.agentNotifier,
+               let activity = container.agentActivity {
+                switch activity.notificationAuthorization {
+                case .unknown, .notDetermined:
+                    Button {
+                        Task {
+                            _ = await activity
+                                .requestNotificationAuthorization(
+                                    notifier: notifier
+                                )
+                        }
+                    } label: {
+                        Label("에이전트 알림 허용", systemImage: "bell")
+                    }
+                    .buttonStyle(MoraeCompactButtonStyle(variant: .chip))
+                    .help("에이전트 종료 알림을 위한 macOS 권한을 요청합니다.")
+                case .authorized:
+                    Label("에이전트 알림 켜짐", systemImage: "bell.fill")
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(MoraeColor.mutedForeground)
+                case .denied:
+                    Label(
+                        "알림 꺼짐 · 메뉴 막대 아이콘으로 표시합니다.",
+                        systemImage: "bell.slash"
+                    )
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(MoraeColor.mutedForeground)
+                }
+            }
+        }
+    }
+
+    private func agentRow(_ run: AgentRun) -> some View {
+        HStack(alignment: .center, spacing: MoraeSpacing.small) {
+            Image(systemName: agentStatusIcon(run.status))
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(agentStatusColor(run.status))
+                .frame(width: 20)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(run.title ?? "\(agentSourceName(run.source)) 작업")
+                    .font(.system(size: 12.5, weight: .medium))
+                    .foregroundStyle(MoraeColor.foreground)
+                    .lineLimit(2)
+                Text(
+                    "\(agentStatusText(run.status)) · "
+                        + agentRelativeTime(run.updatedAt)
+                )
+                .font(.system(size: 10.5))
+                .foregroundStyle(MoraeColor.secondaryForeground)
+            }
+            Spacer(minLength: MoraeSpacing.xSmall)
+            if run.isUnread {
+                Circle()
+                    .fill(MoraeColor.accent)
+                    .frame(width: 6, height: 6)
+                    .accessibilityLabel("읽지 않음")
+            }
+        }
+        .padding(.horizontal, MoraeSpacing.regular)
+        .padding(.vertical, MoraeSpacing.compact)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            "\(agentSourceName(run.source)), "
+                + "\(agentStatusText(run.status)), "
+                + agentRelativeTime(run.updatedAt)
+        )
+    }
+
+    private func agentRunGroups(for runs: [AgentRun]) -> [AgentRunGroup] {
+        var groupOrder: [String] = []
+        var grouped: [String: [AgentRun]] = [:]
+        for run in runs {
+            let title = agentGroupTitle(run)
+            if grouped[title] == nil {
+                groupOrder.append(title)
+            }
+            grouped[title, default: []].append(run)
+        }
+        return groupOrder.map {
+            AgentRunGroup(id: $0, title: $0, runs: grouped[$0] ?? [])
+        }
+    }
+
+    private func agentGroupTitle(_ run: AgentRun) -> String {
+        guard let path = run.projectPath, !path.isEmpty else {
+            return agentSourceName(run.source)
+        }
+        let components = URL(fileURLWithPath: path)
+            .pathComponents
+            .filter { $0 != "/" }
+        return components.suffix(2).joined(separator: "/")
+    }
+
+    private func agentSourceName(_ source: AgentSource) -> String {
+        source == .codex ? "Codex" : "Claude"
+    }
+
+    private func agentStatusText(_ status: AgentStatus) -> String {
+        switch status {
+        case .running: "진행 중"
+        case .attentionRequired: "확인 필요"
+        case .responded: "응답 완료"
+        case .completed: "작업 완료"
+        case .failed: "실패"
+        case .cancelled: "취소됨"
+        }
+    }
+
+    private func agentStatusIcon(_ status: AgentStatus) -> String {
+        switch status {
+        case .running: "ellipsis.circle"
+        case .attentionRequired: "exclamationmark.bubble"
+        case .responded: "text.bubble.fill"
+        case .completed: "checkmark.circle.fill"
+        case .failed: "xmark.octagon.fill"
+        case .cancelled: "minus.circle"
+        }
+    }
+
+    private func agentStatusColor(_ status: AgentStatus) -> Color {
+        switch status {
+        case .running, .cancelled: MoraeColor.secondaryForeground
+        case .attentionRequired: .orange
+        case .responded: MoraeColor.accent
+        case .completed: .green
+        case .failed: MoraeColor.error
+        }
+    }
+
+    private func agentRelativeTime(_ date: Date) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .short
+        return formatter.localizedString(
+            for: date,
+            relativeTo: container.clock.now()
+        )
     }
 
     private func emptySection(

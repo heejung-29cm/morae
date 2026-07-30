@@ -26,6 +26,10 @@ final class AppContainer {
     let articleRepository: (any ArticleRepository)?
     let briefingRepository: (any BriefingRepository)?
     let generateBriefing: (any BriefingGenerating)?
+    let agentRepository: (any AgentRepository)?
+    let receiveAgentEvent: ReceiveAgentEvent?
+    let agentNotifier: (any AgentNotifying)?
+    let agentActivity: AgentActivityModel?
     let agentSocketServer: AgentSocketServer?
     let startupError: AppError?
 
@@ -39,6 +43,10 @@ final class AppContainer {
         articleRepository: (any ArticleRepository)? = nil,
         briefingRepository: (any BriefingRepository)? = nil,
         generateBriefing: (any BriefingGenerating)? = nil,
+        agentRepository: (any AgentRepository)? = nil,
+        receiveAgentEvent: ReceiveAgentEvent? = nil,
+        agentNotifier: (any AgentNotifying)? = nil,
+        agentActivity: AgentActivityModel? = nil,
         agentSocketServer: AgentSocketServer? = nil,
         startupError: AppError? = nil
     ) {
@@ -51,6 +59,10 @@ final class AppContainer {
         self.articleRepository = articleRepository
         self.briefingRepository = briefingRepository
         self.generateBriefing = generateBriefing
+        self.agentRepository = agentRepository
+        self.receiveAgentEvent = receiveAgentEvent
+        self.agentNotifier = agentNotifier
+        self.agentActivity = agentActivity
         self.agentSocketServer = agentSocketServer
         self.startupError = startupError
     }
@@ -74,18 +86,49 @@ final class AppContainer {
             let now = clock.now()
             let defaultFeeds = try DefaultFeedLoader.load(at: now)
             try feedSourceRepository.seedDefaultsSynchronously(defaultFeeds)
+            let agentRepository = GRDBAgentRepository(
+                database: database,
+                uuidGenerator: uuidGenerator
+            )
+            let agentNotifier = SystemAgentNotifier()
+            let retention = AgentRetentionService(
+                repository: agentRepository,
+                clock: clock
+            )
+            let receiveAgentEvent = ReceiveAgentEvent(
+                repository: agentRepository,
+                privacy: UserDefaultsAgentPrivacyPolicyProvider(),
+                notifier: agentNotifier,
+                retention: retention,
+                uuidGenerator: uuidGenerator
+            )
+            let agentActivity = AgentActivityModel(
+                repository: agentRepository
+            )
+            Task {
+                await retention.pruneIfNeeded(force: true)
+            }
             let agentSocketServer = AgentSocketServer(
-                endpointURL: AgentSocketEndpoint.defaultURL()
+                endpointURL: AgentSocketEndpoint.defaultURL(),
+                handler: ReceiveAgentEnvelopeHandler(
+                    receiver: receiveAgentEvent
+                )
             )
             let runningAgentSocketServer: AgentSocketServer?
-            do {
-                try agentSocketServer.start()
-                runningAgentSocketServer = agentSocketServer
-            } catch {
-                MoraeLogger(category: .agentIPC).error(
-                    event: PublicLogToken("socket_start_failed")
-                )
+            if ProcessInfo.processInfo.environment[
+                "XCTestConfigurationFilePath"
+            ] != nil {
                 runningAgentSocketServer = nil
+            } else {
+                do {
+                    try agentSocketServer.start()
+                    runningAgentSocketServer = agentSocketServer
+                } catch {
+                    MoraeLogger(category: .agentIPC).error(
+                        event: PublicLogToken("socket_start_failed")
+                    )
+                    runningAgentSocketServer = nil
+                }
             }
             return AppContainer(
                 clock: clock,
@@ -106,6 +149,10 @@ final class AppContainer {
                     clock: clock,
                     uuidGenerator: uuidGenerator
                 ),
+                agentRepository: agentRepository,
+                receiveAgentEvent: receiveAgentEvent,
+                agentNotifier: agentNotifier,
+                agentActivity: agentActivity,
                 agentSocketServer: runningAgentSocketServer
             )
         } catch {

@@ -1,0 +1,6 @@
+{
+  "session_id": "claude-session-fixture",
+  "prompt_id": "claude-turn-fixture",
+  "hook_event_name": "TaskCompleted",
+  "task_id": "fixture-task"
+}
