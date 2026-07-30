@@ -120,6 +120,9 @@ struct MenuBarRootView: View {
         .task {
             await viewModel.onAppear()
         }
+        .onDisappear {
+            viewModel.onDisappear()
+        }
     }
 
     private var header: some View {

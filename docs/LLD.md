@@ -19,10 +19,10 @@
 - 사용자 에이전트 작업은 모래의 이벤트 전달 실패 때문에 실패하지 않아야 합니다.
 - 시간의 순간은 UTC Unix millisecond, 사용자의 날짜는 `LocalDay`로 명시적으로 구분합니다.
 
-현재 as-built 범위는 Sprint 0, Sprint 1, Sprint 1.5와 Sprint 2입니다.
-따라서 이 문서의 Todo·DB·메뉴 막대 UI와 Feed·Article 절은 구현과
-동기화돼 있습니다. Briefing, Agent IPC·알림, Settings·배포 절은 후속
-Sprint의 확정 설계입니다.
+현재 as-built 범위는 Sprint 0, Sprint 1, Sprint 1.5, Sprint 2와 Sprint
+3입니다. 따라서 이 문서의 Todo·DB·메뉴 막대 UI, Feed·Article과 수동
+Briefing 절은 구현과 동기화돼 있습니다. Agent IPC·알림,
+Settings·배포 절은 후속 Sprint의 확정 설계입니다.
 
 ## 2. 빌드 단위
 
@@ -968,10 +968,10 @@ struct MoraeApp: App {
 
 ```swift
 enum BriefingViewState: Equatable {
-    case idle(previous: BriefingViewData?)
-    case loading(previous: BriefingViewData?)
-    case loaded(BriefingViewData)
-    case failed(message: String, localTasks: LocalTaskSummary)
+    case idle(previous: GeneratedBriefing?)
+    case loading(previous: GeneratedBriefing?)
+    case success(GeneratedBriefing)
+    case failure(FailedBriefing, previous: GeneratedBriefing?)
 }
 ```
 
@@ -979,6 +979,10 @@ enum BriefingViewState: Equatable {
 - retry 버튼은 표시하지 않습니다.
 - 이전 브리핑이 있으면 loading 중에도 흐리게 유지합니다.
 - 새 실행이 끝나면 같은 날짜의 최신 결과로 교체합니다.
+- 해당 날짜의 저장된 실행이 없을 때 첫 버튼 동작은 선택적인 최우선 할 일
+  질문을 표시하며 아직 피드를 조회하지 않습니다.
+- 답변은 `important` 할 일로 저장한 뒤 생성하고, 건너뛰기는 저장 없이
+  생성합니다. 같은 날짜의 다음 실행과 앱 재시작 후에는 질문하지 않습니다.
 
 ### 15.4 Todo 편집
 

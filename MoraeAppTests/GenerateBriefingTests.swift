@@ -309,6 +309,142 @@ final class GenerateBriefingTests: XCTestCase {
         XCTAssertFalse(viewModel.isPriorityPromptPresented)
     }
 
+    @MainActor
+    func testManualRerunCreatesOneRunAndLatestSurvivesDatabaseReopen()
+        async throws
+    {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: root,
+            withIntermediateDirectories: true
+        )
+        defer { try? FileManager.default.removeItem(at: root) }
+        let databaseURL = root.appendingPathComponent("morae.sqlite")
+        let runOneID = UUID(
+            uuidString: "33000000-0000-0000-0000-000000000001"
+        )!
+        let runTwoID = UUID(
+            uuidString: "33000000-0000-0000-0000-000000000002"
+        )!
+        let source = FeedSource(
+            id: UUID(),
+            name: "Restart Feed",
+            feedURL: URL(string: "https://feeds.invalid/restart.xml")!,
+            isOfficial: true,
+            createdAt: Self.restartNow,
+            updatedAt: Self.restartNow
+        )
+        let feedClient = ScriptedFeedClient(
+            successfulSourceIDs: [source.id]
+        )
+
+        do {
+            let database = try AppDatabase.open(at: databaseURL)
+            let todoRepository = GRDBTodoRepository(database: database)
+            let feedRepository = GRDBFeedSourceRepository(database: database)
+            let articleRepository = GRDBArticleRepository(
+                database: database,
+                clock: FixedClock(instant: Self.restartNow)
+            )
+            let briefingRepository = GRDBBriefingRepository(
+                database: database,
+                uuidGenerator: SequenceUUIDGenerator(values: [runOneID])
+            )
+            try await feedRepository.seedDefaults([source])
+            let generator = GenerateBriefing(
+                todoRepository: todoRepository,
+                feedSourceRepository: feedRepository,
+                feedClient: feedClient,
+                articleRepository: articleRepository,
+                briefingRepository: briefingRepository,
+                preferences: StaticBriefingPreferences(values: []),
+                clock: FixedClock(instant: Self.restartNow),
+                uuidGenerator: SequenceUUIDGenerator(values: [UUID()]),
+                calendar: Self.calendar
+            )
+
+            let firstResult = await generator.execute(day: Self.today)
+            guard case .generated = firstResult else {
+                return XCTFail("Expected first generated result")
+            }
+        }
+
+        do {
+            let database = try AppDatabase.open(at: databaseURL)
+            let todoRepository = GRDBTodoRepository(database: database)
+            let feedRepository = GRDBFeedSourceRepository(database: database)
+            let articleRepository = GRDBArticleRepository(
+                database: database,
+                clock: FixedClock(instant: Self.restartNow)
+            )
+            let briefingRepository = GRDBBriefingRepository(
+                database: database,
+                uuidGenerator: SequenceUUIDGenerator(values: [runTwoID])
+            )
+            let generator = GenerateBriefing(
+                todoRepository: todoRepository,
+                feedSourceRepository: feedRepository,
+                feedClient: feedClient,
+                articleRepository: articleRepository,
+                briefingRepository: briefingRepository,
+                preferences: StaticBriefingPreferences(values: []),
+                clock: FixedClock(instant: Self.restartNow),
+                uuidGenerator: SequenceUUIDGenerator(values: [UUID()]),
+                calendar: Self.calendar
+            )
+            let viewModel = MenuBarViewModel(
+                repository: todoRepository,
+                briefingRepository: briefingRepository,
+                briefingGenerator: generator,
+                clock: FixedClock(instant: Self.restartNow),
+                calendar: Self.calendar
+            )
+            await viewModel.onAppear()
+
+            guard case let .success(restored) = viewModel.briefingState else {
+                return XCTFail("Expected restored first briefing")
+            }
+            XCTAssertEqual(restored.stored.run.id.rawValue, runOneID)
+            await viewModel.requestBriefing()
+
+            let runCount = try database.read { database in
+                try Int.fetchOne(
+                    database,
+                    sql: "SELECT COUNT(*) FROM briefing_runs"
+                )
+            }
+            XCTAssertEqual(runCount, 2)
+            viewModel.onDisappear()
+        }
+
+        do {
+            let database = try AppDatabase.open(at: databaseURL)
+            let todoRepository = GRDBTodoRepository(database: database)
+            let briefingRepository = GRDBBriefingRepository(
+                database: database,
+                uuidGenerator: SequenceUUIDGenerator(values: [])
+            )
+            let viewModel = MenuBarViewModel(
+                repository: todoRepository,
+                briefingRepository: briefingRepository,
+                clock: FixedClock(instant: Self.restartNow),
+                calendar: Self.calendar
+            )
+
+            await viewModel.onAppear()
+
+            guard case let .success(restored) = viewModel.briefingState else {
+                return XCTFail("Expected restored latest briefing")
+            }
+            XCTAssertEqual(restored.stored.run.id.rawValue, runTwoID)
+            XCTAssertNotNil(restored.stored.article)
+            viewModel.onDisappear()
+        }
+        let requestCount = await feedClient.requestCount(for: source.id)
+        XCTAssertEqual(requestCount, 2)
+    }
+
     private func insertSummaryTodos(
         into repository: GRDBTodoRepository
     ) async throws {
@@ -339,6 +475,9 @@ final class GenerateBriefingTests: XCTestCase {
     }
 
     private static let now = Date(unixMilliseconds: 1_775_040_000_000)
+    private static let restartNow = Date(
+        unixMilliseconds: 1_785_412_800_000
+    )
     private static let today = try! LocalDay(rawValue: "2026-07-30")
     private static let todoID = TodoID(
         rawValue: UUID(

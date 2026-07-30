@@ -155,6 +155,11 @@ final class MenuBarViewModel {
         }
     }
 
+    func onDisappear() {
+        observationTask?.cancel()
+        observationTask = nil
+    }
+
     func generateBriefing() async {
         guard !briefingState.isLoading, let briefingGenerator else {
             return

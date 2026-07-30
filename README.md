@@ -2,7 +2,7 @@
 
 macOS 바탕화면에서 매일의 지식, 업무 계획, AI 에이전트 작업 상태를 한곳에 보여주는 개인 비서입니다. 마스코트는 움직이는 햄스터 캐릭터 "모래"입니다.
 
-> 문서 상태: MVP 사양 확정 / Sprint 0·1·1.5·2 구현 완료
+> 문서 상태: MVP 사양 확정 / Sprint 0·1·1.5·2·3 구현 완료
 > 최초 작성: 2026-07-24  
 > 최종 수정: 2026-07-30
 > 코드네임: Hamster Bot (제품명 "모래"로 확정, bundle ID 등 식별자는 로마자 슬러그 `morae` 사용)
@@ -14,11 +14,12 @@ macOS 바탕화면에서 매일의 지식, 업무 계획, AI 에이전트 작업
 - [MVP Sprint Tasks](docs/SPRINT_TASKS.md)
 - [Sprint 1.5 UI Polish](docs/SPRINT_1_5_UI_POLISH.md)
 - [Sprint 2 Demo Checklist](docs/SPRINT_2_DEMO_CHECKLIST.md)
+- [Sprint 3 Demo Checklist](docs/SPRINT_3_DEMO_CHECKLIST.md)
 - [Architecture Decision Records](docs/adr/)
 
 ## 현재 구현 상태
 
-2026-07-30 기준으로 Sprint 0, Sprint 1, Sprint 1.5와 Sprint 2가
+2026-07-30 기준으로 Sprint 0, Sprint 1, Sprint 1.5, Sprint 2와 Sprint 3가
 구현됐습니다.
 
 - macOS 14 이상을 대상으로 하는 `MenuBarExtra(.window)` 앱과 로컬 SQLite
@@ -36,14 +37,16 @@ macOS 바탕화면에서 매일의 지식, 업무 계획, AI 에이전트 작업
 - canonical URL 중복 제거, 최신성·관심사·공식 출처·읽음·최근 추천
   이력을 반영한 결정론적 아티클 선정과 로컬 Article 저장소가
   구현됐습니다.
-- 전체 scheme의 자동화 테스트 63개가 통과합니다 (`MoraeApp` 46개,
+- `오늘 브리핑`을 누른 경우에만 최대 4개 피드를 각각 한 번 조회해 로컬
+  한 일·할 일과 추천 아티클 한 개를 표시합니다. 첫 실행의 선택 질문,
+  부분·전체 실패, 중복 클릭 차단과 재시작 후 최신 결과 복원을 지원합니다.
+- 피드 자동 재시도나 재시도 버튼은 없으며 앱 실행과 메뉴 열기만으로
+  네트워크 요청을 시작하지 않습니다.
+- 전체 scheme의 자동화 테스트 74개가 통과합니다 (`MoraeApp` 57개,
   `MoraeCore` 16개, `HamsterEventCLI` 1개).
 
-Sprint 2는 아티클 수집·선정 기반까지 구현하며 앱 실행만으로 네트워크를
-시작하지 않습니다. 수동 브리핑 조립과 화면 연결은 Sprint 3 범위입니다.
-따라서 현재 화면의 아티클·에이전트 영역은 empty state이고 브리핑 버튼은
-비활성 상태입니다. 에이전트 IPC·알림, 실제 설정 화면과 DMG 출시도 아직
-구현되지 않았습니다. 상세 진행 상태는
+에이전트 영역은 아직 empty state입니다. 에이전트 IPC·알림, 실제 설정
+화면과 DMG 출시는 Sprint 4~6 범위입니다. 상세 진행 상태는
 [MVP Sprint Tasks](docs/SPRINT_TASKS.md)를 기준으로 합니다.
 
 ## 1. 제품 목표
@@ -63,7 +66,7 @@ Sprint 2는 아티클 수집·선정 기반까지 구현하며 앱 실행만으�
 | 인터페이스 | 역할 | 상태 |
 | --- | --- | --- |
 | 바탕화면 위젯 | 아티클, 완료한 일, 오늘 할 일 등 자주 보는 요약 정보 | MVP 이후 2단계 |
-| 메뉴 막대 앱 | 상세 내용, 할 일 편집, 에이전트 상태, 설정 | Sprint 1.5까지 구현 |
+| 메뉴 막대 앱 | 상세 내용, 할 일 편집, 수동 브리핑, 에이전트 상태, 설정 | Sprint 3까지 구현 |
 | 마스코트(모래) | 메뉴 막대 앱 또는 별도 오버레이 창에서 움직이는 햄스터 캐릭터로 상태를 표현 | MVP 이후 2단계 |
 | macOS 알림 | 에이전트 작업 완료, 승인 필요, 실패 등 즉시 확인할 이벤트 | Sprint 5 예정 |
 
