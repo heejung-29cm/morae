@@ -18,6 +18,7 @@ final class AgentSocketServer: @unchecked Sendable {
     let endpointURL: URL
     private let endpoint: AgentSocketEndpoint
     private let expectedUserID: uid_t
+    private let handler: any AgentEnvelopeHandling
 
     private let queue: DispatchQueue
     private let workerQueue: DispatchQueue
@@ -29,12 +30,14 @@ final class AgentSocketServer: @unchecked Sendable {
     init(
         endpointURL: URL,
         expectedUserID: uid_t = getuid(),
+        handler: any AgentEnvelopeHandling = RejectingAgentEnvelopeHandler(),
         queue: DispatchQueue = DispatchQueue(
             label: "io.github.heejung-29cm.morae.agent-socket"
         )
     ) {
         self.endpointURL = endpointURL
         self.expectedUserID = expectedUserID
+        self.handler = handler
         endpoint = AgentSocketEndpoint(
             url: endpointURL,
             expectedUserID: expectedUserID
@@ -158,13 +161,81 @@ final class AgentSocketServer: @unchecked Sendable {
             }
             workerQueue.async { [weak self] in
                 if let self {
-                    _ = try? AgentSocketFrameReader(
-                        expectedUserID: self.expectedUserID
-                    ).read(from: connection)
+                    AgentSocketConnectionProcessor(
+                        expectedUserID: self.expectedUserID,
+                        handler: self.handler
+                    ).process(connection)
                 }
                 close(connection)
                 self?.lock.withLock {
                     self?.activeConnectionCount -= 1
+                }
+            }
+        }
+    }
+}
+
+protocol AgentEnvelopeHandling: Sendable {
+    func handle(_ envelope: AgentTransportEnvelope) -> AgentIngressAck
+}
+
+struct RejectingAgentEnvelopeHandler: AgentEnvelopeHandling {
+    func handle(_ envelope: AgentTransportEnvelope) -> AgentIngressAck {
+        .failure(.unsupportedEvent)
+    }
+}
+
+struct AgentSocketConnectionProcessor {
+    let expectedUserID: uid_t
+    let handler: any AgentEnvelopeHandling
+
+    func process(_ fileDescriptor: Int32) {
+        let ack: AgentIngressAck
+        do {
+            let envelope = try AgentSocketFrameReader(
+                expectedUserID: expectedUserID
+            ).read(from: fileDescriptor)
+            ack = handler.handle(envelope)
+        } catch let error as AgentSocketFrameValidationError {
+            ack = .failure(error.code)
+        } catch {
+            ack = .failure(.invalidPayload)
+        }
+        AgentSocketAckWriter().write(ack, to: fileDescriptor)
+        shutdown(fileDescriptor, SHUT_WR)
+    }
+}
+
+struct AgentSocketAckWriter {
+    func write(_ ack: AgentIngressAck, to fileDescriptor: Int32) {
+        guard let data = try? JSONEncoder().encode(ack),
+              data.count <= AgentIPCContract.maximumAckByteCount
+        else {
+            return
+        }
+        var noSignal: Int32 = 1
+        setsockopt(
+            fileDescriptor,
+            SOL_SOCKET,
+            SO_NOSIGPIPE,
+            &noSignal,
+            socklen_t(MemoryLayout.size(ofValue: noSignal))
+        )
+        data.withUnsafeBytes { buffer in
+            guard let baseAddress = buffer.baseAddress else { return }
+            var offset = 0
+            while offset < data.count {
+                let written = Darwin.write(
+                    fileDescriptor,
+                    baseAddress.advanced(by: offset),
+                    data.count - offset
+                )
+                if written > 0 {
+                    offset += written
+                } else if written < 0 && errno == EINTR {
+                    continue
+                } else {
+                    return
                 }
             }
         }

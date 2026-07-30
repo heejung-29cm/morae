@@ -5,6 +5,71 @@ import MoraeCore
 import XCTest
 
 final class AgentSocketServerTests: XCTestCase {
+    private struct StubHandler: AgentEnvelopeHandling {
+        let ack: AgentIngressAck
+
+        func handle(
+            _ envelope: AgentTransportEnvelope
+        ) -> AgentIngressAck {
+            ack
+        }
+    }
+
+    func testConnectionWritesSuccessOnlyAfterHandlerReturns() throws {
+        let descriptors = try socketPair()
+        defer {
+            close(descriptors.0)
+            close(descriptors.1)
+        }
+        let eventID = UUID()
+        let frame = try AgentFrameCodec.encode(
+            AgentTransportEnvelope(
+                source: .codex,
+                eventHint: "agent-turn-complete",
+                receivedAtMs: 123,
+                rawPayload: Data("{}".utf8)
+            )
+        )
+        _ = frame.withUnsafeBytes {
+            Darwin.write(descriptors.0, $0.baseAddress, frame.count)
+        }
+
+        AgentSocketConnectionProcessor(
+            expectedUserID: getuid(),
+            handler: StubHandler(ack: .success(eventID: eventID))
+        ).process(descriptors.1)
+
+        XCTAssertEqual(
+            try readAck(from: descriptors.0),
+            .success(eventID: eventID)
+        )
+    }
+
+    func testConnectionWritesSafeValidationFailureAck() throws {
+        let descriptors = try socketPair()
+        defer {
+            close(descriptors.0)
+            close(descriptors.1)
+        }
+        var emptyLength: [UInt8] = [0, 0, 0, 0]
+        XCTAssertEqual(
+            Darwin.write(descriptors.0, &emptyLength, emptyLength.count),
+            emptyLength.count
+        )
+
+        AgentSocketConnectionProcessor(
+            expectedUserID: getuid(),
+            handler: StubHandler(ack: .success(eventID: UUID()))
+        ).process(descriptors.1)
+
+        let data = try readUntilEOF(from: descriptors.0)
+        XCTAssertFalse(String(decoding: data, as: UTF8.self).contains("raw"))
+        XCTAssertEqual(
+            try JSONDecoder().decode(AgentIngressAck.self, from: data),
+            .failure(.invalidPayload)
+        )
+    }
+
     func testFrameReaderAcceptsPartialReads() throws {
         let descriptors = try socketPair()
         defer {
@@ -245,6 +310,34 @@ final class AgentSocketServerTests: XCTestCase {
                 error as? AgentSocketFrameValidationError,
                 AgentSocketFrameValidationError(code: expectedCode)
             )
+        }
+    }
+
+    private func readAck(from fileDescriptor: Int32) throws
+        -> AgentIngressAck {
+        let data = try readUntilEOF(from: fileDescriptor)
+        return try JSONDecoder().decode(AgentIngressAck.self, from: data)
+    }
+
+    private func readUntilEOF(from fileDescriptor: Int32) throws -> Data {
+        var data = Data()
+        var buffer = [UInt8](repeating: 0, count: 512)
+        while true {
+            let count = Darwin.read(
+                fileDescriptor,
+                &buffer,
+                buffer.count
+            )
+            if count > 0 {
+                data.append(contentsOf: buffer.prefix(count))
+            } else if count == 0 {
+                return data
+            } else if errno != EINTR {
+                throw NSError(
+                    domain: NSPOSIXErrorDomain,
+                    code: Int(errno)
+                )
+            }
         }
     }
 }
