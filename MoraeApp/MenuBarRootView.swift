@@ -241,6 +241,14 @@ struct MenuBarRootView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(viewModel.todayTodos) { item in
                         todayTodoRow(item)
+                        if item.id != viewModel.todayTodos.last?.id {
+                            Rectangle()
+                                .fill(MoraeColor.separator)
+                                .frame(height: 0.5)
+                                .padding(.leading, 42)
+                                .padding(.trailing, MoraeSpacing.small)
+                                .accessibilityHidden(true)
+                        }
                     }
                 }
             }
