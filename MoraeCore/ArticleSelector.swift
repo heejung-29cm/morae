@@ -1,0 +1,120 @@
+import Foundation
+
+public struct ArticleSelector: Sendable {
+    private let deduplicator: FeedCandidateDeduplicator
+    private let canonicalizer: URLCanonicalizer
+
+    public init(
+        deduplicator: FeedCandidateDeduplicator = FeedCandidateDeduplicator(),
+        canonicalizer: URLCanonicalizer = URLCanonicalizer()
+    ) {
+        self.deduplicator = deduplicator
+        self.canonicalizer = canonicalizer
+    }
+
+    public func select(
+        from candidates: [FeedCandidate],
+        interests: [String],
+        readURLs: Set<URL>,
+        recentlyRecommendedURLs: Set<URL>,
+        now: Date
+    ) throws -> FeedCandidate? {
+        let candidates = try deduplicator.deduplicate(candidates)
+        guard !candidates.isEmpty else {
+            return nil
+        }
+        let readURLs = try canonicalURLs(readURLs)
+        let recentURLs = try canonicalURLs(recentlyRecommendedURLs)
+        let allRecentlyRecommended = candidates.allSatisfy {
+            recentURLs.contains($0.articleURL)
+        }
+
+        return candidates.sorted { lhs, rhs in
+            let lhsScore = score(
+                lhs,
+                interests: interests,
+                readURLs: readURLs,
+                recentURLs: recentURLs,
+                suppressRecentPenalty: allRecentlyRecommended,
+                now: now
+            )
+            let rhsScore = score(
+                rhs,
+                interests: interests,
+                readURLs: readURLs,
+                recentURLs: recentURLs,
+                suppressRecentPenalty: allRecentlyRecommended,
+                now: now
+            )
+            if lhsScore != rhsScore {
+                return lhsScore > rhsScore
+            }
+            if lhs.publishedAt != rhs.publishedAt {
+                return (lhs.publishedAt ?? .distantPast)
+                    > (rhs.publishedAt ?? .distantPast)
+            }
+            return lhs.articleURL.absoluteString < rhs.articleURL.absoluteString
+        }
+        .first
+    }
+
+    private func score(
+        _ candidate: FeedCandidate,
+        interests: [String],
+        readURLs: Set<URL>,
+        recentURLs: Set<URL>,
+        suppressRecentPenalty: Bool,
+        now: Date
+    ) -> Int {
+        return freshnessScore(candidate.publishedAt, now: now)
+            + interestScore(candidate.title, interests: interests)
+            + (candidate.isOfficialSource ? 15 : 0)
+            + (readURLs.contains(candidate.articleURL) ? 0 : 10)
+            - (
+                !suppressRecentPenalty
+                    && recentURLs.contains(candidate.articleURL) ? 60 : 0
+            )
+    }
+
+    private func freshnessScore(_ publishedAt: Date?, now: Date) -> Int {
+        guard let publishedAt else {
+            return 0
+        }
+        let elapsedDays = max(
+            0,
+            Int(now.timeIntervalSince(publishedAt) / 86_400)
+        )
+        return switch elapsedDays {
+        case 0...1: 50
+        case 2...3: 40
+        case 4...7: 30
+        case 8...14: 15
+        default: 0
+        }
+    }
+
+    private func interestScore(_ title: String, interests: [String]) -> Int {
+        let interestTokens = Set(interests.flatMap(tokens(in:)))
+        guard !interestTokens.isEmpty else {
+            return 0
+        }
+        let titleTokens = Set(tokens(in: title))
+        let matches = interestTokens.intersection(titleTokens).count
+        return Int(
+            (Double(matches) / Double(interestTokens.count) * 25).rounded(
+                .down
+            )
+        )
+    }
+
+    private func tokens(in value: String) -> [String] {
+        value
+            .lowercased()
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { !$0.isEmpty }
+    }
+
+    private func canonicalURLs(_ urls: Set<URL>) throws -> Set<URL> {
+        try Set(urls.map(canonicalizer.canonicalize))
+    }
+}
