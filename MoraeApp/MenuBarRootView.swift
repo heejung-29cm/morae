@@ -185,16 +185,22 @@ struct MenuBarRootView: View {
                                 )
                             )
                             .toggleStyle(.checkbox)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         Button("선택 항목을 오늘로 가져오기") {
                             Task {
                                 await viewModel.carryOverSelected()
                             }
                         }
+                        .buttonStyle(
+                            MoraeCompactButtonStyle(variant: .chip)
+                        )
                         .disabled(viewModel.selectedCarryOverIDs.isEmpty)
                     }
                     .padding(.top, 6)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }
@@ -210,6 +216,7 @@ struct MenuBarRootView: View {
                     }
                     .onExitCommand {
                         quickAddTitle = ""
+                        isQuickAddFocused = false
                         viewModel.clearValidationMessage()
                     }
                     .accessibilityLabel("빠른 할 일 추가")
@@ -382,6 +389,7 @@ struct MenuBarRootView: View {
         Task {
             if await viewModel.addTodo(title: title) {
                 quickAddTitle = ""
+                isQuickAddFocused = false
             }
         }
     }

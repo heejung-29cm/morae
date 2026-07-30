@@ -90,11 +90,19 @@ struct TodoRowView: View {
     @ViewBuilder
     private var dragHandle: some View {
         if let dragIdentifier {
-            Image(systemName: "circle.grid.2x3.fill")
-                .font(.system(size: 10))
-                .foregroundStyle(MoraeColor.secondaryForeground)
+            VStack(spacing: 3) {
+                ForEach(0..<3, id: \.self) { _ in
+                    HStack(spacing: 3) {
+                        Circle()
+                            .frame(width: 2, height: 2)
+                        Circle()
+                            .frame(width: 2, height: 2)
+                    }
+                }
+            }
+                .foregroundStyle(MoraeColor.mutedForeground)
                 .frame(width: 18, height: 24)
-                .opacity(isHovered ? 0.62 : 0.32)
+                .opacity(isHovered ? 0.82 : 0.58)
                 .contentShape(Rectangle())
                 .onDrag {
                     onDragStarted()
