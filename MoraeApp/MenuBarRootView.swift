@@ -71,11 +71,13 @@ struct MenuBarRootView: View {
     @Environment(\.openURL) private var openURL
     @State private var viewModel: MenuBarViewModel
     @State private var quickAddTitle = ""
+    @State private var priorityTitle = ""
     @State private var editingDraft: TodoEditDraft?
     @State private var draggedTodoID: TodoID?
     @State private var dropInsertion: TodoDropInsertion?
     @State private var todoRowFrames: [TodoID: CGRect] = [:]
     @FocusState private var isQuickAddFocused: Bool
+    @FocusState private var isPriorityPromptFocused: Bool
 
     init(container: AppContainer) {
         self.container = container
@@ -132,7 +134,7 @@ struct MenuBarRootView: View {
             Spacer()
             Button {
                 Task {
-                    await viewModel.generateBriefing()
+                    await viewModel.requestBriefing()
                 }
             } label: {
                 HStack(spacing: MoraeSpacing.compact) {
@@ -186,6 +188,9 @@ struct MenuBarRootView: View {
             .article,
             count: viewModel.briefingState.latestSuccess == nil ? "0" : "1"
         ) {
+            if viewModel.isPriorityPromptPresented {
+                priorityPrompt
+            }
             switch viewModel.briefingState {
             case let .idle(previous):
                 if let previous {
@@ -229,6 +234,62 @@ struct MenuBarRootView: View {
                     recovery: failure.code.recovery
                 )
             }
+        }
+    }
+
+    private var priorityPrompt: some View {
+        VStack(alignment: .leading, spacing: MoraeSpacing.regular) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("오늘 가장 중요한 일은 무엇인가요?")
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .foregroundStyle(MoraeColor.foreground)
+                Text("선택 사항이며, 입력하면 중요 할 일로 저장합니다.")
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(MoraeColor.secondaryForeground)
+            }
+            TextField("가장 중요한 할 일", text: $priorityTitle)
+                .focused($isPriorityPromptFocused)
+                .moraeInput(isFocused: isPriorityPromptFocused)
+                .onSubmit {
+                    submitPriorityAndGenerate()
+                }
+                .onChange(of: priorityTitle) {
+                    viewModel.clearValidationMessage()
+                }
+            if let validationMessage = viewModel.validationMessage {
+                Text(validationMessage)
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(MoraeColor.error)
+            }
+            HStack(spacing: MoraeSpacing.compact) {
+                Spacer()
+                Button("건너뛰기") {
+                    priorityTitle = ""
+                    isPriorityPromptFocused = false
+                    Task {
+                        await viewModel.skipPriorityAndGenerate()
+                    }
+                }
+                .buttonStyle(MoraeCompactButtonStyle(variant: .chip))
+                Button("추가하고 생성") {
+                    submitPriorityAndGenerate()
+                }
+                .buttonStyle(
+                    MoraeCompactButtonStyle(variant: .prominent)
+                )
+            }
+        }
+        .padding(MoraeSpacing.medium)
+        .background(
+            MoraeColor.subtleFill,
+            in: RoundedRectangle(cornerRadius: MoraeRadius.medium)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: MoraeRadius.medium)
+                .stroke(MoraeColor.accent.opacity(0.24), lineWidth: 0.5)
+        }
+        .onAppear {
+            isPriorityPromptFocused = true
         }
     }
 
@@ -702,6 +763,16 @@ struct MenuBarRootView: View {
             if await viewModel.addTodo(title: title) {
                 quickAddTitle = ""
                 isQuickAddFocused = false
+            }
+        }
+    }
+
+    private func submitPriorityAndGenerate() {
+        let title = priorityTitle
+        Task {
+            if await viewModel.savePriorityAndGenerate(title: title) {
+                priorityTitle = ""
+                isPriorityPromptFocused = false
             }
         }
     }

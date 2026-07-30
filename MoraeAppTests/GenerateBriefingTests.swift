@@ -229,6 +229,86 @@ final class GenerateBriefingTests: XCTestCase {
         XCTAssertEqual(viewModel.briefingState, .success(generated))
     }
 
+    @MainActor
+    func testFirstBriefingPromptSavesImportantTodoBeforeGeneration()
+        async throws
+    {
+        let database = try AppDatabase.inMemory()
+        let repository = GRDBTodoRepository(database: database)
+        let generator = CountingResultBriefingGenerator(
+            result: .failed(
+                FailedBriefing(
+                    run: nil,
+                    localTasks: nil,
+                    code: .feedUnavailable,
+                    failedFeedCount: 0
+                )
+            )
+        )
+        let viewModel = MenuBarViewModel(
+            repository: repository,
+            briefingGenerator: generator,
+            clock: FixedClock(instant: Self.now),
+            uuidGenerator: SequenceUUIDGenerator(values: [UUID()]),
+            calendar: Self.calendar
+        )
+
+        await viewModel.requestBriefing()
+
+        XCTAssertTrue(viewModel.isPriorityPromptPresented)
+        let beforeSaveCount = await generator.requestCount()
+        XCTAssertEqual(beforeSaveCount, 0)
+
+        let saved = await viewModel.savePriorityAndGenerate(
+            title: "가장 중요한 일"
+        )
+
+        XCTAssertTrue(saved)
+        XCTAssertFalse(viewModel.isPriorityPromptPresented)
+        let afterSaveCount = await generator.requestCount()
+        XCTAssertEqual(afterSaveCount, 1)
+        let todos = try await repository.list(day: viewModel.today)
+        XCTAssertEqual(todos.count, 1)
+        XCTAssertEqual(todos.first?.title, "가장 중요한 일")
+        XCTAssertEqual(todos.first?.priority, .important)
+    }
+
+    @MainActor
+    func testFirstBriefingPromptCanBeSkipped() async throws {
+        let database = try AppDatabase.inMemory()
+        let repository = GRDBTodoRepository(database: database)
+        let generator = CountingResultBriefingGenerator(
+            result: .failed(
+                FailedBriefing(
+                    run: nil,
+                    localTasks: nil,
+                    code: .feedUnavailable,
+                    failedFeedCount: 0
+                )
+            )
+        )
+        let viewModel = MenuBarViewModel(
+            repository: repository,
+            briefingGenerator: generator,
+            clock: FixedClock(instant: Self.now),
+            calendar: Self.calendar
+        )
+
+        await viewModel.requestBriefing()
+        await viewModel.skipPriorityAndGenerate()
+
+        XCTAssertFalse(viewModel.isPriorityPromptPresented)
+        let requestCount = await generator.requestCount()
+        XCTAssertEqual(requestCount, 1)
+        let todos = try await repository.list(day: viewModel.today)
+        XCTAssertTrue(todos.isEmpty)
+
+        await viewModel.requestBriefing()
+        let secondRequestCount = await generator.requestCount()
+        XCTAssertEqual(secondRequestCount, 2)
+        XCTAssertFalse(viewModel.isPriorityPromptPresented)
+    }
+
     private func insertSummaryTodos(
         into repository: GRDBTodoRepository
     ) async throws {
@@ -420,6 +500,24 @@ private struct StaticBriefingGenerator: BriefingGenerating {
 
     func execute(day _: LocalDay) async -> BriefingResult {
         result
+    }
+}
+
+private actor CountingResultBriefingGenerator: BriefingGenerating {
+    private let result: BriefingResult
+    private var count = 0
+
+    init(result: BriefingResult) {
+        self.result = result
+    }
+
+    func execute(day _: LocalDay) async -> BriefingResult {
+        count += 1
+        return result
+    }
+
+    func requestCount() -> Int {
+        count
     }
 }
 

@@ -76,6 +76,7 @@ final class MenuBarViewModel {
     private(set) var deletionCandidate: TodoItem?
     private(set) var recentlyDeleted: TodoItem?
     private(set) var briefingState: BriefingViewState = .idle(previous: nil)
+    private(set) var isPriorityPromptPresented = false
 
     let today: LocalDay
     let yesterday: LocalDay
@@ -91,6 +92,8 @@ final class MenuBarViewModel {
     @ObservationIgnored
     nonisolated(unsafe) private var undoExpirationTask: Task<Void, Never>?
     private var didLoadLatestBriefing = false
+    private var hasBriefingRunToday = false
+    private var hasHandledPriorityPrompt = false
 
     init(
         repository: (any TodoRepository)?,
@@ -161,12 +164,44 @@ final class MenuBarViewModel {
 
         switch await briefingGenerator.execute(day: today) {
         case let .generated(briefing):
+            hasBriefingRunToday = true
             briefingState = .success(briefing)
         case let .failed(failure):
+            hasBriefingRunToday = failure.run != nil
             briefingState = .failure(failure, previous: previous)
         case .alreadyRunning:
             briefingState = .idle(previous: previous)
         }
+    }
+
+    func requestBriefing() async {
+        guard !briefingState.isLoading, briefingGenerator != nil else {
+            return
+        }
+        if !hasBriefingRunToday && !hasHandledPriorityPrompt {
+            isPriorityPromptPresented = true
+            return
+        }
+        await generateBriefing()
+    }
+
+    func savePriorityAndGenerate(title: String) async -> Bool {
+        guard isPriorityPromptPresented else { return false }
+        guard await addTodo(title: title, priority: .important) else {
+            return false
+        }
+        isPriorityPromptPresented = false
+        hasHandledPriorityPrompt = true
+        await generateBriefing()
+        return true
+    }
+
+    func skipPriorityAndGenerate() async {
+        guard isPriorityPromptPresented else { return }
+        isPriorityPromptPresented = false
+        hasHandledPriorityPrompt = true
+        validationMessage = nil
+        await generateBriefing()
     }
 
     func toggleTodo(id: TodoID) async {
@@ -185,7 +220,10 @@ final class MenuBarViewModel {
         }
     }
 
-    func addTodo(title: String) async -> Bool {
+    func addTodo(
+        title: String,
+        priority: TodoPriority = .normal
+    ) async -> Bool {
         guard let repository else { return false }
         do {
             let instant = clock.now()
@@ -194,7 +232,7 @@ final class MenuBarViewModel {
                 title: title,
                 day: today,
                 status: .pending,
-                priority: .normal,
+                priority: priority,
                 sortOrder: (todayTodos.map(\.sortOrder).max() ?? -1) + 1,
                 createdAt: instant,
                 updatedAt: instant
@@ -415,6 +453,8 @@ final class MenuBarViewModel {
                 briefingState = .idle(previous: nil)
                 return
             }
+            hasBriefingRunToday = true
+            hasHandledPriorityPrompt = true
             let localTasks = try await BuildLocalTaskSummary(
                 repository: repository
             )
