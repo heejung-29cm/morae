@@ -6,9 +6,7 @@ struct TodoRowView: View {
     let canMoveUp: Bool
     let canMoveDown: Bool
     let dragIdentifier: String?
-    let isDragging: Bool
     let onToggleCompletion: () -> Void
-    let onDragStarted: () -> Void
     let onMoveUp: () -> Void
     let onMoveDown: () -> Void
     let onEdit: () -> Void
@@ -36,11 +34,9 @@ struct TodoRowView: View {
         .modifier(
             TodoDragSourceModifier(
                 item: item,
-                identifier: dragIdentifier,
-                onDragStarted: onDragStarted
+                identifier: dragIdentifier
             )
         )
-        .opacity(isDragging ? 0.46 : 1)
         .accessibilityElement(children: .contain)
         .accessibilityActions {
             if item.status == .pending, canMoveUp {
@@ -159,15 +155,11 @@ struct TodoRowView: View {
 private struct TodoDragSourceModifier: ViewModifier {
     let item: TodoItem
     let identifier: String?
-    let onDragStarted: () -> Void
 
     @ViewBuilder
     func body(content: Content) -> some View {
         if let identifier {
-            content.onDrag {
-                onDragStarted()
-                return NSItemProvider(object: identifier as NSString)
-            } preview: {
+            content.draggable(identifier) {
                 TodoDragPreview(item: item)
             }
         } else {
@@ -203,7 +195,7 @@ private struct TodoDragPreview: View {
         .padding(.vertical, 7)
         .frame(width: 340, alignment: .leading)
         .background(
-            .regularMaterial,
+            MoraeColor.controlFill.opacity(0.92),
             in: RoundedRectangle(cornerRadius: MoraeRadius.medium)
         )
         .overlay {

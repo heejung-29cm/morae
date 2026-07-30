@@ -318,8 +318,15 @@ final class MoraeAppTests: XCTestCase {
             TodoReorderPlan.moving(third, before: first, in: original)?.orderedIDs,
             [third, first, second]
         )
+        XCTAssertEqual(
+            TodoReorderPlan.moving(first, before: nil, in: original)?.orderedIDs,
+            [second, third, first]
+        )
         XCTAssertNil(
             TodoReorderPlan.moving(first, before: second, in: original)
+        )
+        XCTAssertNil(
+            TodoReorderPlan.moving(third, before: nil, in: original)
         )
         XCTAssertNil(
             TodoReorderPlan.moving(first, before: first, in: original)

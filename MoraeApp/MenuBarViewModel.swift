@@ -226,7 +226,7 @@ final class MenuBarViewModel {
         await persistPendingOrder(pending)
     }
 
-    func movePending(id: TodoID, before targetID: TodoID) async {
+    func movePending(id: TodoID, before targetID: TodoID?) async {
         let pending = todayTodos.filter { $0.status == .pending }
         guard let plan = TodoReorderPlan.moving(
             id,

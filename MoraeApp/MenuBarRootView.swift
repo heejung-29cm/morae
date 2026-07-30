@@ -48,8 +48,8 @@ struct MenuBarRootView: View {
     @State private var viewModel: MenuBarViewModel
     @State private var quickAddTitle = ""
     @State private var editingDraft: TodoEditDraft?
-    @State private var draggedTodoID: TodoID?
     @State private var dropTargetID: TodoID?
+    @State private var isEndDropTarget = false
     @FocusState private var isQuickAddFocused: Bool
 
     init(container: AppContainer) {
@@ -238,12 +238,7 @@ struct MenuBarRootView: View {
             if viewModel.todayTodos.isEmpty {
                 emptyMessage(for: .todayTodos)
             } else {
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(viewModel.todayTodos) { item in
-                        todoDivider(before: item)
-                        todayTodoRow(item)
-                    }
-                }
+                todayTodoList
             }
             if let draft = editingDraft {
                 TodoEditorView(
@@ -299,31 +294,79 @@ struct MenuBarRootView: View {
         }
     }
 
-    @ViewBuilder
-    private func todoDivider(before item: TodoItem) -> some View {
-        let isFirst = viewModel.todayTodos.first?.id == item.id
-        let isDropTarget = dropTargetID == item.id
-
-        if isFirst {
-            if isDropTarget {
-                dropInsertionLine
-                    .frame(height: 0)
-                    .zIndex(1)
-            }
-        } else {
-            ZStack {
-                Rectangle()
-                    .fill(MoraeColor.separator)
-                    .frame(height: 0.5)
-                    .padding(.leading, 42)
-                    .padding(.trailing, MoraeSpacing.small)
-                if isDropTarget {
-                    dropInsertionLine
-                }
-            }
-            .frame(height: 0.5)
-            .accessibilityHidden(true)
+    private var todayTodoList: some View {
+        let pendingItems = viewModel.todayTodos.filter {
+            $0.status == .pending
         }
+        let completedItems = viewModel.todayTodos.filter {
+            $0.status == .completed
+        }
+
+        return VStack(alignment: .leading, spacing: 0) {
+            ForEach(pendingItems) { item in
+                todoDropDivider(before: item, isFirst: item.id == pendingItems.first?.id)
+                todoRowContent(item)
+            }
+            if !pendingItems.isEmpty {
+                todoEndDropZone(showsStaticLine: !completedItems.isEmpty)
+            }
+            ForEach(completedItems) { item in
+                if item.id != completedItems.first?.id {
+                    staticTodoDivider
+                }
+                todoRowContent(item)
+            }
+        }
+    }
+
+    private func todoDropDivider(
+        before item: TodoItem,
+        isFirst: Bool
+    ) -> some View {
+        ZStack {
+            if !isFirst {
+                staticTodoDivider
+            }
+            if dropTargetID == item.id {
+                dropInsertionLine
+            }
+        }
+        .frame(height: 6)
+        .contentShape(Rectangle())
+        .dropDestination(for: String.self) { identifiers, _ in
+            acceptTodoDrop(identifiers, before: item.id)
+        } isTargeted: { isTargeted in
+            updateDropTarget(isTargeted, before: item.id)
+        }
+        .accessibilityHidden(true)
+    }
+
+    private func todoEndDropZone(showsStaticLine: Bool) -> some View {
+        ZStack {
+            if showsStaticLine {
+                staticTodoDivider
+            }
+            if isEndDropTarget {
+                dropInsertionLine
+            }
+        }
+        .frame(height: 6)
+        .contentShape(Rectangle())
+        .dropDestination(for: String.self) { identifiers, _ in
+            acceptTodoDrop(identifiers, before: nil)
+        } isTargeted: { isTargeted in
+            updateDropTarget(isTargeted, before: nil)
+        }
+        .accessibilityHidden(true)
+    }
+
+    private var staticTodoDivider: some View {
+        Rectangle()
+            .fill(MoraeColor.separator)
+            .frame(height: 0.5)
+            .padding(.leading, 42)
+            .padding(.trailing, MoraeSpacing.small)
+            .accessibilityHidden(true)
     }
 
     private var dropInsertionLine: some View {
@@ -338,37 +381,39 @@ struct MenuBarRootView: View {
             .accessibilityHidden(true)
     }
 
-    @ViewBuilder
-    private func todayTodoRow(_ item: TodoItem) -> some View {
-        if item.status == .pending {
-            todoRowContent(item)
-                .dropDestination(for: String.self) { identifiers, _ in
-                    defer {
-                        draggedTodoID = nil
-                        dropTargetID = nil
-                    }
-                    guard let sourceStorageID = identifiers.first,
-                          let source = pendingTodo(storageID: sourceStorageID),
-                          TodoReorderPlan.moving(
-                            source.id,
-                            before: item.id,
-                            in: pendingTodoIDs
-                          ) != nil else {
-                        return false
-                    }
-                    Task {
-                        await viewModel.movePending(id: source.id, before: item.id)
-                    }
-                    return true
-                } isTargeted: { isTargeted in
-                    if isTargeted, draggedTodoID != item.id {
-                        dropTargetID = item.id
-                    } else if dropTargetID == item.id {
-                        dropTargetID = nil
-                    }
-                }
-        } else {
-            todoRowContent(item)
+    private func acceptTodoDrop(
+        _ identifiers: [String],
+        before targetID: TodoID?
+    ) -> Bool {
+        defer {
+            dropTargetID = nil
+            isEndDropTarget = false
+        }
+        guard let sourceStorageID = identifiers.first,
+              let source = pendingTodo(storageID: sourceStorageID),
+              TodoReorderPlan.moving(
+                source.id,
+                before: targetID,
+                in: pendingTodoIDs
+              ) != nil else {
+            return false
+        }
+        Task {
+            await viewModel.movePending(id: source.id, before: targetID)
+        }
+        return true
+    }
+
+    private func updateDropTarget(
+        _ isTargeted: Bool,
+        before targetID: TodoID?
+    ) {
+        if isTargeted {
+            dropTargetID = targetID
+            isEndDropTarget = targetID == nil
+        } else if dropTargetID == targetID {
+            dropTargetID = nil
+            isEndDropTarget = false
         }
     }
 
@@ -381,14 +426,10 @@ struct MenuBarRootView: View {
             dragIdentifier: item.status == .pending
                 ? item.id.storageValue
                 : nil,
-            isDragging: draggedTodoID == item.id,
             onToggleCompletion: {
                 Task {
                     await viewModel.toggleTodo(id: item.id)
                 }
-            },
-            onDragStarted: {
-                draggedTodoID = item.id
             },
             onMoveUp: {
                 Task {
