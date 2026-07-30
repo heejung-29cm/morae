@@ -2,6 +2,66 @@ import MoraeCore
 import XCTest
 
 final class HamsterEventCLITests: XCTestCase {
+    private final class RecordingSender: AgentFrameSending {
+        var frames: [Data] = []
+        var error: Error?
+
+        func send(
+            frame: Data,
+            to socketURL: URL,
+            deadline: AgentDeadline
+        ) throws -> AgentIngressAck {
+            frames.append(frame)
+            if let error {
+                throw error
+            }
+            return .success(eventID: UUID())
+        }
+    }
+
+    func testCommandBuildsAndSendsOneEnvelope() throws {
+        let sender = RecordingSender()
+        let date = Date(timeIntervalSince1970: 1_234.567)
+        let command = HamsterEventCommand(
+            sender: sender,
+            socketURL: URL(fileURLWithPath: "/tmp/test.sock"),
+            wallClock: { date },
+            monotonicClock: { 10 }
+        )
+
+        command.run(
+            arguments: [#"{"type":"agent-turn-complete"}"#],
+            readStandardInput: {
+                XCTFail("Codex input must not read stdin")
+                return Data()
+            }
+        )
+
+        XCTAssertEqual(sender.frames.count, 1)
+        let frame = try XCTUnwrap(sender.frames.first)
+        let body = frame.dropFirst(AgentIPCContract.headerByteCount)
+        let envelope = try AgentFrameCodec.decodeEnvelope(
+            from: Data(body)
+        )
+        XCTAssertEqual(envelope.source, .codex)
+        XCTAssertEqual(envelope.receivedAtMs, 1_234_567)
+    }
+
+    func testCommandSilentlyIgnoresInvalidInputAndTransportFailure() {
+        let sender = RecordingSender()
+        let command = HamsterEventCommand(
+            sender: sender,
+            socketURL: URL(fileURLWithPath: "/tmp/test.sock")
+        )
+
+        command.run(arguments: [])
+        XCTAssertTrue(sender.frames.isEmpty)
+
+        sender.error = AgentSocketClientError.connectionFailed
+        command.run(arguments: ["{}"])
+        XCTAssertEqual(sender.frames.count, 1)
+    }
+
     func testResolvesPerUserSocketLocation() {
         let url = AgentSocketLocation.url(
             temporaryDirectory: URL(fileURLWithPath: "/tmp"),
