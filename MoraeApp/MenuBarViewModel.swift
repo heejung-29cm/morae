@@ -27,6 +27,43 @@ enum BriefingViewState: Equatable, Sendable {
     }
 }
 
+extension BriefingErrorCode {
+    var title: String {
+        switch self {
+        case .noEnabledFeeds: "사용 가능한 피드가 없습니다"
+        case .noCandidates: "추천할 아티클이 없습니다"
+        case .feedUnavailable: "피드를 불러오지 못했습니다"
+        case .persistenceFailed: "브리핑을 저장하지 못했습니다"
+        }
+    }
+
+    var message: String {
+        switch self {
+        case .noEnabledFeeds:
+            "설정에서 하나 이상의 피드를 활성화해 주세요."
+        case .noCandidates:
+            "현재 피드에서 추천할 새 아티클을 찾지 못했습니다."
+        case .feedUnavailable:
+            "로컬 한 일과 할 일은 정리했지만 아티클을 가져오지 못했습니다."
+        case .persistenceFailed:
+            "로컬 데이터 처리 중 문제가 발생했습니다."
+        }
+    }
+
+    var recovery: String {
+        switch self {
+        case .noEnabledFeeds:
+            "피드 설정을 확인한 뒤 다음 브리핑을 직접 실행할 수 있습니다."
+        case .noCandidates:
+            "다음에 브리핑 버튼을 누르면 최신 피드를 다시 확인합니다."
+        case .feedUnavailable:
+            "이번 실행에서는 자동 재시도하지 않았습니다."
+        case .persistenceFailed:
+            "앱을 다시 연 뒤 브리핑을 직접 실행해 주세요."
+        }
+    }
+}
+
 @MainActor
 @Observable
 final class MenuBarViewModel {

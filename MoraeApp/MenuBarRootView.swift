@@ -68,6 +68,7 @@ private struct TodoRowFramePreferenceKey: PreferenceKey {
 @MainActor
 struct MenuBarRootView: View {
     let container: AppContainer
+    @Environment(\.openURL) private var openURL
     @State private var viewModel: MenuBarViewModel
     @State private var quickAddTitle = ""
     @State private var editingDraft: TodoEditDraft?
@@ -129,12 +130,26 @@ struct MenuBarRootView: View {
                     .foregroundStyle(MoraeColor.secondaryForeground)
             }
             Spacer()
-            Button {} label: {
+            Button {
+                Task {
+                    await viewModel.generateBriefing()
+                }
+            } label: {
                 HStack(spacing: MoraeSpacing.compact) {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 11))
-                        .opacity(0.85)
-                    Text("오늘 브리핑")
+                    if viewModel.briefingState.isLoading {
+                        ProgressView()
+                            .controlSize(.small)
+                            .frame(width: 11, height: 11)
+                    } else {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 11))
+                            .opacity(0.85)
+                    }
+                    Text(
+                        viewModel.briefingState.isLoading
+                            ? "생성 중"
+                            : "오늘 브리핑"
+                    )
                 }
             }
             .buttonStyle(
@@ -143,8 +158,11 @@ struct MenuBarRootView: View {
                     horizontalPadding: 9
                 )
             )
-            .disabled(true)
-            .help("수동 브리핑은 Sprint 3에서 연결됩니다.")
+            .disabled(
+                container.generateBriefing == nil
+                    || viewModel.briefingState.isLoading
+            )
+            .help("클릭할 때만 피드에서 오늘의 아티클을 확인합니다.")
             SettingsLink {
                 Label("설정", systemImage: "ellipsis")
                     .labelStyle(.iconOnly)
@@ -162,8 +180,185 @@ struct MenuBarRootView: View {
         .padding(.vertical, MoraeSpacing.medium)
     }
 
+    @ViewBuilder
     private var articleSection: some View {
-        emptySection(.article, count: "0")
+        sectionContainer(
+            .article,
+            count: viewModel.briefingState.latestSuccess == nil ? "0" : "1"
+        ) {
+            switch viewModel.briefingState {
+            case let .idle(previous):
+                if let previous {
+                    briefingSuccessContent(previous)
+                } else {
+                    emptyMessage(for: .article)
+                }
+            case let .loading(previous):
+                if let previous {
+                    briefingSuccessContent(previous)
+                        .opacity(0.62)
+                }
+                HStack(spacing: MoraeSpacing.small) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("한 일과 할 일을 정리하고 아티클을 찾고 있습니다.")
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(MoraeColor.secondaryForeground)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(MoraeSpacing.regular)
+                .background(
+                    MoraeColor.subtleFill,
+                    in: RoundedRectangle(cornerRadius: MoraeRadius.medium)
+                )
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("오늘 브리핑 생성 중")
+            case let .success(briefing):
+                briefingSuccessContent(briefing)
+            case let .failure(failure, previous):
+                if let previous {
+                    briefingSuccessContent(previous)
+                        .opacity(0.72)
+                } else if let summary = failure.localTasks {
+                    localTaskSummary(summary)
+                }
+                MenuBarStateView(
+                    kind: .error,
+                    title: failure.code.title,
+                    message: failure.code.message,
+                    recovery: failure.code.recovery
+                )
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func briefingSuccessContent(
+        _ briefing: GeneratedBriefing
+    ) -> some View {
+        localTaskSummary(briefing.localTasks)
+        if let article = briefing.stored.article {
+            articleCard(article)
+        }
+        if briefing.failedFeedCount > 0 {
+            MenuBarStateView(
+                kind: .validation,
+                title: "일부 피드를 확인하지 못했습니다",
+                message: "성공한 피드의 아티클로 추천을 만들었습니다.",
+                recovery: "실패한 피드는 이번 실행에서 재시도하지 않았습니다."
+            )
+        }
+    }
+
+    private func localTaskSummary(
+        _ summary: LocalTaskSummary
+    ) -> some View {
+        VStack(alignment: .leading, spacing: MoraeSpacing.regular) {
+            briefingTaskGroup(
+                title: "어제 한 일",
+                systemImage: "checkmark.circle.fill",
+                items: summary.yesterdayCompleted,
+                emptyText: "어제 완료한 일이 없습니다."
+            )
+            briefingTaskGroup(
+                title: "오늘 할 일",
+                systemImage: "circle",
+                items: summary.todayPending,
+                emptyText: "오늘 예정된 일이 없습니다."
+            )
+        }
+        .padding(MoraeSpacing.regular)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            MoraeColor.subtleFill,
+            in: RoundedRectangle(cornerRadius: MoraeRadius.medium)
+        )
+    }
+
+    private func briefingTaskGroup(
+        title: String,
+        systemImage: String,
+        items: [TodoItem],
+        emptyText: String
+    ) -> some View {
+        VStack(alignment: .leading, spacing: MoraeSpacing.compact) {
+            Text(title)
+                .font(.system(size: 11.5, weight: .semibold))
+                .foregroundStyle(MoraeColor.secondaryForeground)
+            if items.isEmpty {
+                Text(emptyText)
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(MoraeColor.mutedForeground)
+            } else {
+                ForEach(items.prefix(4)) { item in
+                    HStack(alignment: .firstTextBaseline, spacing: 7) {
+                        Image(systemName: systemImage)
+                            .font(.system(size: 10))
+                            .foregroundStyle(MoraeColor.accent)
+                        Text(item.title)
+                            .font(.system(size: 12))
+                            .foregroundStyle(MoraeColor.foreground)
+                            .lineLimit(2)
+                    }
+                }
+                if items.count > 4 {
+                    Text("외 \(items.count - 4)개")
+                        .font(.system(size: 11))
+                        .foregroundStyle(MoraeColor.mutedForeground)
+                        .padding(.leading, 17)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func articleCard(_ article: Article) -> some View {
+        Button {
+            openURL(article.canonicalURL)
+        } label: {
+            VStack(alignment: .leading, spacing: MoraeSpacing.small) {
+                Text(article.title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(MoraeColor.foreground)
+                    .multilineTextAlignment(.leading)
+                    .lineLimit(3)
+                HStack(spacing: MoraeSpacing.compact) {
+                    Text(article.sourceName)
+                    if let publishedAt = article.publishedAt {
+                        Text("·")
+                        Text(
+                            publishedAt.formatted(
+                                date: .abbreviated,
+                                time: .omitted
+                            )
+                        )
+                    }
+                    Spacer(minLength: MoraeSpacing.small)
+                    Label("원문 열기", systemImage: "arrow.up.right")
+                        .labelStyle(.titleAndIcon)
+                }
+                .font(.system(size: 11))
+                .foregroundStyle(MoraeColor.secondaryForeground)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(MoraeSpacing.medium)
+            .background(
+                MoraeColor.selectedFill,
+                in: RoundedRectangle(cornerRadius: MoraeRadius.large)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: MoraeRadius.large)
+                    .stroke(MoraeColor.accent.opacity(0.20), lineWidth: 0.5)
+            }
+            .contentShape(
+                RoundedRectangle(cornerRadius: MoraeRadius.large)
+            )
+        }
+        .buttonStyle(.plain)
+        .help("기본 브라우저에서 원문 열기")
+        .accessibilityLabel(
+            "\(article.title), \(article.sourceName), 원문 열기"
+        )
     }
 
     private var yesterdaySection: some View {
