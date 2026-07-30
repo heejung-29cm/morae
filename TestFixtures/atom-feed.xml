@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Morae Atom Fixture</title>
+  <id>https://fixture.invalid/atom.xml</id>
+  <updated>2026-07-30T00:00:00Z</updated>
+  <entry>
+    <title>  Web platform updates  </title>
+    <id>https://fixture.invalid/articles/platform</id>
+    <link rel="alternate" href="/articles/platform?utm_medium=feed"/>
+    <published>2026-07-29T03:00:00Z</published>
+    <updated>2026-07-29T04:00:00Z</updated>
+    <summary>Summary that Morae ignores.</summary>
+    <content>Content that Morae ignores.</content>
+  </entry>
+  <entry>
+    <title>Date is optional</title>
+    <id>https://fixture.invalid/articles/atom-no-date</id>
+    <link href="https://fixture.invalid/articles/atom-no-date"/>
+    <published>not-a-date</published>
+  </entry>
+  <entry>
+    <id>https://fixture.invalid/articles/atom-missing-title</id>
+    <link href="https://fixture.invalid/articles/atom-missing-title"/>
+  </entry>
+  <entry>
+    <title>Invalid URL</title>
+    <id>urn:fixture:invalid-url</id>
+    <link href="javascript:alert(1)"/>
+  </entry>
+</feed>

@@ -44,6 +44,46 @@ final class FeedParsingTests: XCTestCase {
         )
     }
 
+    func testAtomMapsToSameMetadataModelAndSkipsInvalidItems() throws {
+        let source = makeSource(name: "Atom Source")
+        let data = try FixtureLoader.data(named: "atom-feed", extension: "xml")
+
+        let candidates = try FeedMetadataParser().parseAtom(
+            data: data,
+            source: source
+        )
+
+        XCTAssertEqual(candidates.count, 2)
+        XCTAssertEqual(candidates[0].title, "Web platform updates")
+        XCTAssertEqual(
+            candidates[0].articleURL.absoluteString,
+            "https://fixture.invalid/articles/platform?utm_medium=feed"
+        )
+        XCTAssertEqual(
+            candidates[0].publishedAt,
+            Date(timeIntervalSince1970: 1_785_294_000)
+        )
+        XCTAssertEqual(candidates[1].title, "Date is optional")
+        XCTAssertNil(candidates[1].publishedAt)
+    }
+
+    func testGenericParserSupportsRSSAndAtom() throws {
+        let parser = FeedMetadataParser()
+        let source = makeSource(name: "Generic")
+
+        let rss = try parser.parse(
+            data: FixtureLoader.data(named: "rss-feed", extension: "xml"),
+            source: source
+        )
+        let atom = try parser.parse(
+            data: FixtureLoader.data(named: "atom-feed", extension: "xml"),
+            source: source
+        )
+
+        XCTAssertEqual(rss.count, 2)
+        XCTAssertEqual(atom.count, 2)
+    }
+
     private func makeSource(name: String) -> FeedSource {
         let instant = Date(unixMilliseconds: 1_775_039_400_000)
         return FeedSource(
