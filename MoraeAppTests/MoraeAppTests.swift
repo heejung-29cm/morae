@@ -382,6 +382,81 @@ final class MoraeAppTests: XCTestCase {
         )
     }
 
+    func testSettingsStoreFallsBackFromMalformedValuesAndPersistsTypedValues() {
+        let suite = "MoraeAppTests.Settings.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set("future", forKey: MoraeSettingKey.schemaVersion)
+        defaults.set("yes", forKey: MoraeSettingKey.launchAtLogin)
+        defaults.set([1, 2], forKey: MoraeSettingKey.interests)
+        defaults.set(1, forKey: MoraeSettingKey.storeAgentTitle)
+        let store = UserDefaultsSettingsStore(defaults: defaults)
+
+        XCTAssertEqual(store.load(), MoraeSettings())
+
+        let expected = MoraeSettings(
+            launchAtLogin: true,
+            interests: ["AI", "Frontend"],
+            storeProjectPath: true,
+            storeAgentTitle: true,
+            storeLastMessage: true,
+            showDetailsInNotification: true
+        )
+        store.save(expected)
+        XCTAssertEqual(store.load(), expected)
+        XCTAssertEqual(
+            defaults.integer(forKey: MoraeSettingKey.schemaVersion),
+            MoraeSettings.schemaVersion
+        )
+    }
+
+    func testHookSnippetsUseBundledExecutableAndValidClaudeJSON() throws {
+        let helperURL = URL(
+            fileURLWithPath: "/Applications/Morae.app/Contents/MacOS/hamster-event"
+        )
+
+        XCTAssertEqual(
+            HookSnippetBuilder.codex(helperURL: helperURL),
+            #"notify = ["/Applications/Morae.app/Contents/MacOS/hamster-event"]"#
+        )
+        let claude = HookSnippetBuilder.claude(helperURL: helperURL)
+        let object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: Data(claude.utf8))
+                as? [String: Any]
+        )
+        XCTAssertNotNil(object["hooks"])
+        XCTAssertTrue(claude.contains("claude-task-completed"))
+        XCTAssertTrue(claude.contains("claude-stop-failure"))
+    }
+
+    func testDetailedNotificationCopyIsBoundedAndExplicitlyOptIn() {
+        let instant = Date(unixMilliseconds: 1_800_000_000_000)
+        let run = AgentRun(
+            id: AgentRunID(rawValue: UUID()),
+            source: .codex,
+            sessionID: "session",
+            turnID: "turn",
+            title: String(repeating: "제", count: 140),
+            status: .completed,
+            receivedAt: instant,
+            updatedAt: instant,
+            lastMessage: String(repeating: "내", count: 260)
+        )
+
+        XCTAssertEqual(
+            SystemAgentNotifier.title(for: run),
+            "Codex 작업이 완료됐어요."
+        )
+        XCTAssertEqual(
+            SystemAgentNotifier.title(for: run, showDetails: true).count,
+            120
+        )
+        XCTAssertEqual(
+            SystemAgentNotifier.body(for: run, showDetails: true).count,
+            240
+        )
+    }
+
     private func resolvedColor(
         _ color: NSColor,
         appearance: NSAppearance

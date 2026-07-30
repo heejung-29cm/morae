@@ -21,6 +21,21 @@ protocol AgentRepository: Sendable {
     func observation(limit: Int) -> AsyncValueObservation<[AgentRun]>
     func markAllRead() async throws
     func prune(receivedBefore cutoff: Date) async throws -> Int
+    func scrub(_ fields: Set<AgentPrivateField>) async throws
+}
+
+enum AgentPrivateField: String, CaseIterable, Sendable {
+    case projectPath
+    case title
+    case lastMessage
+
+    var column: String {
+        switch self {
+        case .projectPath: "project_path"
+        case .title: "title"
+        case .lastMessage: "last_message"
+        }
+    }
 }
 
 private struct AgentRunRecord: Codable, FetchableRecord, PersistableRecord {
@@ -310,6 +325,19 @@ final class GRDBAgentRepository: AgentRepository, @unchecked Sendable {
         }
     }
 
+    func scrub(_ fields: Set<AgentPrivateField>) async throws {
+        guard !fields.isEmpty else { return }
+        let assignments = fields
+            .sorted { $0.rawValue < $1.rawValue }
+            .map { "\($0.column) = NULL" }
+            .joined(separator: ", ")
+        try await writer.write { database in
+            try database.execute(
+                sql: "UPDATE agent_runs SET \(assignments)"
+            )
+        }
+    }
+
     private static func resolveTurnID(
         _ event: NormalizedAgentEvent,
         generated: String,
@@ -392,6 +420,15 @@ protocol AgentNotifying: Sendable {
 }
 
 struct SystemAgentNotifier: AgentNotifying {
+    let privacy: any AgentPrivacyPolicyProviding
+
+    init(
+        privacy: any AgentPrivacyPolicyProviding =
+            UserDefaultsAgentPrivacyPolicyProvider()
+    ) {
+        self.privacy = privacy
+    }
+
     func authorizationState() async -> AgentNotificationAuthorizationState {
         let status = await UNUserNotificationCenter.current()
             .notificationSettings()
@@ -421,8 +458,9 @@ struct SystemAgentNotifier: AgentNotifying {
             return
         }
         let content = UNMutableNotificationContent()
-        content.title = Self.title(for: run)
-        content.body = Self.body(for: run.status)
+        let policy = privacy.policy()
+        content.title = Self.title(for: run, showDetails: policy.showDetailsInNotification)
+        content.body = Self.body(for: run, showDetails: policy.showDetailsInNotification)
         content.categoryIdentifier = "MORAE_AGENT_EVENT"
         content.userInfo = ["destination": "agent-list"]
         let request = UNNotificationRequest(
@@ -433,7 +471,13 @@ struct SystemAgentNotifier: AgentNotifying {
         try? await center.add(request)
     }
 
-    static func title(for run: AgentRun) -> String {
+    static func title(
+        for run: AgentRun,
+        showDetails: Bool = false
+    ) -> String {
+        if showDetails, let title = run.title?.trimmedNonEmpty {
+            return String(title.prefix(120))
+        }
         let source = run.source == .codex ? "Codex" : "Claude"
         return switch run.status {
         case .responded: "\(source) 응답이 끝났어요."
@@ -442,6 +486,16 @@ struct SystemAgentNotifier: AgentNotifying {
         case .attentionRequired: "\(source) 확인이 필요해요."
         case .running, .cancelled: "\(source) 상태가 변경됐어요."
         }
+    }
+
+    static func body(
+        for run: AgentRun,
+        showDetails: Bool = false
+    ) -> String {
+        if showDetails, let message = run.lastMessage?.trimmedNonEmpty {
+            return String(message.prefix(240))
+        }
+        return body(for: run.status)
     }
 
     static func body(for status: AgentStatus) -> String {
@@ -453,6 +507,13 @@ struct SystemAgentNotifier: AgentNotifying {
         case .running, .responded, .completed, .cancelled:
             "모래에서 최근 기록을 확인해 주세요."
         }
+    }
+}
+
+private extension String {
+    var trimmedNonEmpty: String? {
+        let value = trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? nil : value
     }
 }
 

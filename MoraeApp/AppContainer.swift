@@ -20,6 +20,7 @@ final class AppContainer {
     let clock: any Clock
     let uuidGenerator: any UUIDGenerating
     let menuBarContentLoader: any MenuBarContentLoading
+    let settingsStore: any SettingsStoring
     let database: AppDatabase?
     let todoRepository: (any TodoRepository)?
     let feedSourceRepository: (any FeedSourceRepository)?
@@ -37,6 +38,7 @@ final class AppContainer {
         clock: any Clock,
         uuidGenerator: any UUIDGenerating = SystemUUIDGenerator(),
         menuBarContentLoader: any MenuBarContentLoading,
+        settingsStore: any SettingsStoring = UserDefaultsSettingsStore(),
         database: AppDatabase? = nil,
         todoRepository: (any TodoRepository)? = nil,
         feedSourceRepository: (any FeedSourceRepository)? = nil,
@@ -53,6 +55,7 @@ final class AppContainer {
         self.clock = clock
         self.uuidGenerator = uuidGenerator
         self.menuBarContentLoader = menuBarContentLoader
+        self.settingsStore = settingsStore
         self.database = database
         self.todoRepository = todoRepository
         self.feedSourceRepository = feedSourceRepository
@@ -73,6 +76,7 @@ final class AppContainer {
             let database = try AppDatabase.open(at: paths.databaseURL)
             let clock = SystemClock()
             let uuidGenerator = SystemUUIDGenerator()
+            let settingsStore = UserDefaultsSettingsStore()
             let todoRepository = GRDBTodoRepository(database: database)
             let feedSourceRepository = GRDBFeedSourceRepository(database: database)
             let articleRepository = GRDBArticleRepository(
@@ -90,14 +94,14 @@ final class AppContainer {
                 database: database,
                 uuidGenerator: uuidGenerator
             )
-            let agentNotifier = SystemAgentNotifier()
+            let agentNotifier = SystemAgentNotifier(privacy: settingsStore)
             let retention = AgentRetentionService(
                 repository: agentRepository,
                 clock: clock
             )
             let receiveAgentEvent = ReceiveAgentEvent(
                 repository: agentRepository,
-                privacy: UserDefaultsAgentPrivacyPolicyProvider(),
+                privacy: settingsStore,
                 notifier: agentNotifier,
                 retention: retention,
                 uuidGenerator: uuidGenerator
@@ -134,6 +138,7 @@ final class AppContainer {
                 clock: clock,
                 uuidGenerator: uuidGenerator,
                 menuBarContentLoader: EmptyMenuBarContentLoader(),
+                settingsStore: settingsStore,
                 database: database,
                 todoRepository: todoRepository,
                 feedSourceRepository: feedSourceRepository,
@@ -145,7 +150,7 @@ final class AppContainer {
                     feedClient: LiveFeedClient(),
                     articleRepository: articleRepository,
                     briefingRepository: briefingRepository,
-                    preferences: UserDefaultsBriefingPreferences(),
+                    preferences: settingsStore,
                     clock: clock,
                     uuidGenerator: uuidGenerator
                 ),

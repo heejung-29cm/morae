@@ -69,6 +69,46 @@ final class FeedSourceRepositoryTests: XCTestCase {
         XCTAssertEqual(checkedSource?.lastCheckedAt, checkedAt)
     }
 
+    func testCustomFeedCanBeAddedToggledDeletedAndCannotDuplicate()
+        async throws
+    {
+        let database = try AppDatabase.inMemory()
+        let repository = GRDBFeedSourceRepository(database: database)
+        let instant = Date(unixMilliseconds: 1_775_039_400_000)
+        let source = FeedSource(
+            id: UUID(),
+            name: "Custom",
+            feedURL: URL(string: "https://custom.invalid/feed.xml")!,
+            isOfficial: false,
+            createdAt: instant,
+            updatedAt: instant
+        )
+
+        try await repository.add(source)
+        await XCTAssertThrowsErrorAsync {
+            try await repository.add(
+                FeedSource(
+                    id: UUID(),
+                    name: "Duplicate",
+                    feedURL: source.feedURL,
+                    isOfficial: false,
+                    createdAt: instant,
+                    updatedAt: instant
+                )
+            )
+        }
+        try await repository.setEnabled(
+            id: source.id,
+            enabled: false,
+            at: instant.addingTimeInterval(1)
+        )
+        let disabledSources = try await repository.allSources()
+        XCTAssertFalse(try XCTUnwrap(disabledSources.first).isEnabled)
+        try await repository.deleteCustom(id: source.id)
+        let remainingSources = try await repository.allSources()
+        XCTAssertTrue(remainingSources.isEmpty)
+    }
+
     func testV3SeedDisablesRetiredDefaultsAndKeepsCustomSource()
         async throws
     {
@@ -154,6 +194,24 @@ final class FeedSourceRepositoryTests: XCTestCase {
               }
             ]
             """.utf8
+        )
+    }
+}
+
+private func XCTAssertThrowsErrorAsync(
+    _ expression: () async throws -> Void,
+    file: StaticString = #filePath,
+    line: UInt = #line
+) async {
+    do {
+        try await expression()
+        XCTFail("Expected error", file: file, line: line)
+    } catch {
+        XCTAssertEqual(
+            error as? FeedSourceMappingError,
+            .duplicateURL,
+            file: file,
+            line: line
         )
     }
 }

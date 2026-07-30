@@ -18,9 +18,7 @@ struct MoraeApp: App {
         .menuBarExtraStyle(.window)
 
         Settings {
-            Text("설정은 이후 Sprint에서 제공됩니다.")
-                .frame(width: 360, height: 180)
-                .padding()
+            SettingsRootView(container: container)
         }
     }
 }

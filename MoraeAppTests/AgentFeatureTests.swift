@@ -177,6 +177,38 @@ final class AgentFeatureTests: XCTestCase {
         )
     }
 
+    func testPrivacyScrubClearsSelectedColumnsInOneUpdate() async throws {
+        let fixture = try TemporaryDatabase()
+        let repository = GRDBAgentRepository(
+            database: fixture.database,
+            uuidGenerator: SequenceUUIDGenerator()
+        )
+        let privateEvent = try NormalizedAgentEvent(
+            source: .claude,
+            sessionID: "private-session",
+            turnID: "private-turn",
+            sourceEvent: "TaskCompleted",
+            eventKeyComponent: "task:private",
+            status: .completed,
+            occurredAt: date,
+            receivedAt: date,
+            closesRun: false,
+            startsRun: false,
+            projectPath: "/private/project",
+            title: "private title",
+            lastMessage: "private message"
+        )
+        _ = try await repository.apply(privateEvent)
+
+        try await repository.scrub([.projectPath, .lastMessage])
+
+        let recentRuns = try await repository.recent(limit: 1)
+        let run = try XCTUnwrap(recentRuns.first)
+        XCTAssertNil(run.projectPath)
+        XCTAssertEqual(run.title, "private title")
+        XCTAssertNil(run.lastMessage)
+    }
+
     func testRetentionRunsAtMostOncePerDayUnlessForced() async throws {
         let fixture = try TemporaryDatabase()
         let repository = GRDBAgentRepository(

@@ -4,13 +4,19 @@ import MoraeCore
 
 protocol FeedSourceRepository: Sendable {
     func seedDefaults(_ sources: [FeedSource]) async throws
+    func allSources() async throws -> [FeedSource]
     func enabledSources() async throws -> [FeedSource]
+    func add(_ source: FeedSource) async throws
+    func setEnabled(id: UUID, enabled: Bool, at: Date) async throws
+    func deleteCustom(id: UUID) async throws
     func markChecked(id: UUID, at: Date) async throws
 }
 
 enum FeedSourceMappingError: Error, Equatable, Sendable {
     case invalidID(String)
     case invalidURL(String)
+    case duplicateURL
+    case officialSourceCannotBeDeleted
 }
 
 enum DefaultFeedError: Error, Equatable, Sendable {
@@ -192,6 +198,68 @@ final class GRDBFeedSourceRepository: FeedSourceRepository, @unchecked Sendable 
                     """
             )
             .map { try $0.domain() }
+        }
+    }
+
+    func allSources() async throws -> [FeedSource] {
+        try await writer.read { database in
+            try FeedSourceRecord.fetchAll(
+                database,
+                sql: """
+                    SELECT * FROM feed_sources
+                    ORDER BY is_official DESC, created_at_ms ASC, id ASC
+                    """
+            )
+            .map { try $0.domain() }
+        }
+    }
+
+    func add(_ source: FeedSource) async throws {
+        do {
+            try await writer.write { database in
+                try FeedSourceRecord(source: source).insert(database)
+            }
+        } catch let error as DatabaseError
+            where error.extendedResultCode == .SQLITE_CONSTRAINT_UNIQUE {
+            throw FeedSourceMappingError.duplicateURL
+        }
+    }
+
+    func setEnabled(
+        id: UUID,
+        enabled: Bool,
+        at date: Date
+    ) async throws {
+        try await writer.write { database in
+            try database.execute(
+                sql: """
+                    UPDATE feed_sources
+                    SET is_enabled = ?, updated_at_ms = ?
+                    WHERE id = ?
+                    """,
+                arguments: [
+                    enabled,
+                    date.unixMilliseconds,
+                    id.uuidString.lowercased(),
+                ]
+            )
+        }
+    }
+
+    func deleteCustom(id: UUID) async throws {
+        try await writer.write { database in
+            let isOfficial = try Bool.fetchOne(
+                database,
+                sql: "SELECT is_official FROM feed_sources WHERE id = ?",
+                arguments: [id.uuidString.lowercased()]
+            )
+            guard isOfficial != true else {
+                throw FeedSourceMappingError.officialSourceCannotBeDeleted
+            }
+            try database.execute(
+                sql: "DELETE FROM feed_sources WHERE id = ?",
+                arguments: [id.uuidString.lowercased()]
+            )
         }
     }
 
