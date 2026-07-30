@@ -173,6 +173,62 @@ final class GenerateBriefingTests: XCTestCase {
         XCTAssertEqual(articleCount, 0)
     }
 
+    @MainActor
+    func testViewModelTransitionsFromIdleToLoadingAndBlocksDuplicateTrigger()
+        async
+    {
+        let generator = SuspendedBriefingGenerator()
+        let viewModel = MenuBarViewModel(
+            repository: nil,
+            briefingGenerator: generator,
+            clock: FixedClock(instant: Self.now),
+            calendar: Self.calendar
+        )
+        XCTAssertEqual(viewModel.briefingState, .idle(previous: nil))
+
+        let generation = Task { @MainActor in
+            await viewModel.generateBriefing()
+        }
+        while await generator.requestCount() == 0 {
+            await Task.yield()
+        }
+        XCTAssertEqual(viewModel.briefingState, .loading(previous: nil))
+
+        await viewModel.generateBriefing()
+        let requestCount = await generator.requestCount()
+        XCTAssertEqual(requestCount, 1)
+
+        let failure = FailedBriefing(
+            run: nil,
+            localTasks: nil,
+            code: .feedUnavailable,
+            failedFeedCount: 4
+        )
+        await generator.resolve(with: .failed(failure))
+        await generation.value
+        XCTAssertEqual(
+            viewModel.briefingState,
+            .failure(failure, previous: nil)
+        )
+    }
+
+    @MainActor
+    func testViewModelTransitionsToSuccess() async {
+        let generated = Self.generatedBriefing
+        let viewModel = MenuBarViewModel(
+            repository: nil,
+            briefingGenerator: StaticBriefingGenerator(
+                result: .generated(generated)
+            ),
+            clock: FixedClock(instant: Self.now),
+            calendar: Self.calendar
+        )
+
+        await viewModel.generateBriefing()
+
+        XCTAssertEqual(viewModel.briefingState, .success(generated))
+    }
+
     private func insertSummaryTodos(
         into repository: GRDBTodoRepository
     ) async throws {
@@ -215,6 +271,40 @@ final class GenerateBriefingTests: XCTestCase {
     private static let articleUUID = UUID(
         uuidString: "32000000-0000-0000-0000-000000000003"
     )!
+    private static var generatedBriefing: GeneratedBriefing {
+        let articleID = ArticleID(rawValue: articleUUID)
+        let article = Article(
+            id: articleID,
+            canonicalURL: URL(string: "https://articles.invalid/state")!,
+            title: "State machines",
+            sourceName: "Morae",
+            sourceURL: URL(string: "https://feeds.invalid/state.xml"),
+            publishedAt: now,
+            isRead: false,
+            isLiked: false,
+            createdAt: now,
+            updatedAt: now
+        )
+        let run = BriefingRun(
+            id: BriefingRunID(rawValue: runUUID),
+            day: today,
+            status: .succeeded,
+            selectedArticleID: articleID,
+            triggeredAt: now,
+            finishedAt: now
+        )
+        return GeneratedBriefing(
+            stored: StoredBriefing(run: run, article: article),
+            localTasks: LocalTaskSummary(
+                yesterdayCompleted: [],
+                todayPending: [],
+                todayCompletedCount: 0,
+                todayEstimatedMinutes: 0,
+                mostImportantTodoID: nil
+            ),
+            failedFeedCount: 0
+        )
+    }
     private static var calendar: Calendar {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!
@@ -302,6 +392,35 @@ private actor ScriptedFeedClient: FeedClient {
 
 private enum ScriptedFeedError: Error {
     case unavailable
+}
+
+private actor SuspendedBriefingGenerator: BriefingGenerating {
+    private var count = 0
+    private var continuation: CheckedContinuation<BriefingResult, Never>?
+
+    func execute(day _: LocalDay) async -> BriefingResult {
+        count += 1
+        return await withCheckedContinuation { continuation in
+            self.continuation = continuation
+        }
+    }
+
+    func requestCount() -> Int {
+        count
+    }
+
+    func resolve(with result: BriefingResult) {
+        continuation?.resume(returning: result)
+        continuation = nil
+    }
+}
+
+private struct StaticBriefingGenerator: BriefingGenerating {
+    let result: BriefingResult
+
+    func execute(day _: LocalDay) async -> BriefingResult {
+        result
+    }
 }
 
 private struct StaticBriefingPreferences: BriefingPreferences {

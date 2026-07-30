@@ -81,6 +81,8 @@ struct MenuBarRootView: View {
         _viewModel = State(
             initialValue: MenuBarViewModel(
                 repository: container.todoRepository,
+                briefingRepository: container.briefingRepository,
+                briefingGenerator: container.generateBriefing,
                 clock: container.clock,
                 uuidGenerator: container.uuidGenerator
             )

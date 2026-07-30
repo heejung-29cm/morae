@@ -2,6 +2,31 @@ import Foundation
 import MoraeCore
 import Observation
 
+enum BriefingViewState: Equatable, Sendable {
+    case idle(previous: GeneratedBriefing?)
+    case loading(previous: GeneratedBriefing?)
+    case success(GeneratedBriefing)
+    case failure(FailedBriefing, previous: GeneratedBriefing?)
+
+    var isLoading: Bool {
+        if case .loading = self {
+            return true
+        }
+        return false
+    }
+
+    var latestSuccess: GeneratedBriefing? {
+        switch self {
+        case let .idle(previous), let .loading(previous):
+            previous
+        case let .success(briefing):
+            briefing
+        case let .failure(_, previous):
+            previous
+        }
+    }
+}
+
 @MainActor
 @Observable
 final class MenuBarViewModel {
@@ -13,11 +38,14 @@ final class MenuBarViewModel {
     private(set) var validationMessage: String?
     private(set) var deletionCandidate: TodoItem?
     private(set) var recentlyDeleted: TodoItem?
+    private(set) var briefingState: BriefingViewState = .idle(previous: nil)
 
     let today: LocalDay
     let yesterday: LocalDay
 
     private let repository: (any TodoRepository)?
+    private let briefingRepository: (any BriefingRepository)?
+    private let briefingGenerator: (any BriefingGenerating)?
     private let clock: any Clock
     private let uuidGenerator: any UUIDGenerating
     private let calendar: Calendar
@@ -25,14 +53,19 @@ final class MenuBarViewModel {
     nonisolated(unsafe) private var observationTask: Task<Void, Never>?
     @ObservationIgnored
     nonisolated(unsafe) private var undoExpirationTask: Task<Void, Never>?
+    private var didLoadLatestBriefing = false
 
     init(
         repository: (any TodoRepository)?,
+        briefingRepository: (any BriefingRepository)? = nil,
+        briefingGenerator: (any BriefingGenerating)? = nil,
         clock: any Clock,
         uuidGenerator: any UUIDGenerating = SystemUUIDGenerator(),
         calendar: Calendar = .autoupdatingCurrent
     ) {
         self.repository = repository
+        self.briefingRepository = briefingRepository
+        self.briefingGenerator = briefingGenerator
         self.clock = clock
         self.uuidGenerator = uuidGenerator
         self.calendar = calendar
@@ -42,6 +75,8 @@ final class MenuBarViewModel {
     }
 
     func onAppear() async {
+        await loadLatestBriefing()
+
         guard observationTask == nil, let repository else {
             return
         }
@@ -77,6 +112,23 @@ final class MenuBarViewModel {
             } catch {
                 self?.errorMessage = "할 일 목록을 불러오지 못했습니다."
             }
+        }
+    }
+
+    func generateBriefing() async {
+        guard !briefingState.isLoading, let briefingGenerator else {
+            return
+        }
+        let previous = briefingState.latestSuccess
+        briefingState = .loading(previous: previous)
+
+        switch await briefingGenerator.execute(day: today) {
+        case let .generated(briefing):
+            briefingState = .success(briefing)
+        case let .failed(failure):
+            briefingState = .failure(failure, previous: previous)
+        case .alreadyRunning:
+            briefingState = .idle(previous: previous)
         }
     }
 
@@ -309,6 +361,59 @@ final class MenuBarViewModel {
             try? await Task.sleep(for: .seconds(5))
             guard !Task.isCancelled else { return }
             self?.recentlyDeleted = nil
+        }
+    }
+
+    private func loadLatestBriefing() async {
+        guard !didLoadLatestBriefing else { return }
+        didLoadLatestBriefing = true
+        guard let repository,
+              let briefingRepository else {
+            return
+        }
+
+        do {
+            guard let stored = try await briefingRepository.latest(day: today)
+            else {
+                briefingState = .idle(previous: nil)
+                return
+            }
+            let localTasks = try await BuildLocalTaskSummary(
+                repository: repository
+            )
+            .execute(today: today, calendar: calendar)
+            switch stored.run.status {
+            case .succeeded:
+                briefingState = .success(
+                    GeneratedBriefing(
+                        stored: stored,
+                        localTasks: localTasks,
+                        failedFeedCount: 0
+                    )
+                )
+            case .failed:
+                briefingState = .failure(
+                    FailedBriefing(
+                        run: stored.run,
+                        localTasks: localTasks,
+                        code: stored.run.errorCode ?? .persistenceFailed,
+                        failedFeedCount: 0
+                    ),
+                    previous: nil
+                )
+            case .running:
+                briefingState = .idle(previous: nil)
+            }
+        } catch {
+            briefingState = .failure(
+                FailedBriefing(
+                    run: nil,
+                    localTasks: nil,
+                    code: .persistenceFailed,
+                    failedFeedCount: 0
+                ),
+                previous: nil
+            )
         }
     }
 

@@ -25,7 +25,7 @@ final class AppContainer {
     let feedSourceRepository: (any FeedSourceRepository)?
     let articleRepository: (any ArticleRepository)?
     let briefingRepository: (any BriefingRepository)?
-    let generateBriefing: GenerateBriefing?
+    let generateBriefing: (any BriefingGenerating)?
     let startupError: AppError?
 
     init(
@@ -37,7 +37,7 @@ final class AppContainer {
         feedSourceRepository: (any FeedSourceRepository)? = nil,
         articleRepository: (any ArticleRepository)? = nil,
         briefingRepository: (any BriefingRepository)? = nil,
-        generateBriefing: GenerateBriefing? = nil,
+        generateBriefing: (any BriefingGenerating)? = nil,
         startupError: AppError? = nil
     ) {
         self.clock = clock

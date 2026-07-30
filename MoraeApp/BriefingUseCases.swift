@@ -69,7 +69,11 @@ enum BriefingResult: Equatable, Sendable {
     case alreadyRunning
 }
 
-actor GenerateBriefing {
+protocol BriefingGenerating: Sendable {
+    func execute(day: LocalDay) async -> BriefingResult
+}
+
+actor GenerateBriefing: BriefingGenerating {
     private let todoSummary: BuildLocalTaskSummary
     private let feedSourceRepository: any FeedSourceRepository
     private let feedClient: any FeedClient
