@@ -256,6 +256,31 @@ final class AgentSocketServerTests: XCTestCase {
         )
     }
 
+    func testSecondServerCannotUnlinkActiveSocket() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let endpoint = directory.appendingPathComponent("event.sock")
+        let firstServer = AgentSocketServer(endpointURL: endpoint)
+        let secondServer = AgentSocketServer(endpointURL: endpoint)
+        defer {
+            secondServer.stop()
+            firstServer.stop()
+            try? FileManager.default.removeItem(at: directory)
+        }
+        try firstServer.start()
+
+        XCTAssertThrowsError(try secondServer.start()) { error in
+            XCTAssertEqual(
+                error as? AgentSocketServerError,
+                .unsafeEndpoint
+            )
+        }
+        XCTAssertTrue(firstServer.isRunning)
+        XCTAssertTrue(
+            FileManager.default.fileExists(atPath: endpoint.path)
+        )
+    }
+
     func testStartBindsEndpointAndStopRemovesIt() throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)

@@ -1,3 +1,4 @@
+import AppKit
 import Darwin
 import Foundation
 import MoraeCore
@@ -25,6 +26,7 @@ final class AgentSocketServer: @unchecked Sendable {
     private let lock = NSLock()
     private var listeningFileDescriptor: Int32 = -1
     private var source: DispatchSourceRead?
+    private var terminationObserver: NSObjectProtocol?
     private var activeConnectionCount = 0
 
     init(
@@ -68,6 +70,17 @@ final class AgentSocketServer: @unchecked Sendable {
         guard fileDescriptor >= 0 else {
             throw AgentSocketServerError.socketCreationFailed
         }
+        let flags = fcntl(fileDescriptor, F_GETFL)
+        guard flags >= 0,
+              fcntl(
+                  fileDescriptor,
+                  F_SETFL,
+                  flags | O_NONBLOCK
+              ) == 0
+        else {
+            close(fileDescriptor)
+            throw AgentSocketServerError.socketCreationFailed
+        }
         do {
             try bindAndListen(fileDescriptor)
         } catch {
@@ -86,23 +99,39 @@ final class AgentSocketServer: @unchecked Sendable {
         lock.withLock {
             listeningFileDescriptor = fileDescriptor
             source = readSource
+            terminationObserver = NotificationCenter.default.addObserver(
+                forName: NSApplication.willTerminateNotification,
+                object: nil,
+                queue: nil
+            ) { [weak self] _ in
+                self?.stop()
+            }
         }
         readSource.resume()
     }
 
     func stop() {
-        let state: (Int32, DispatchSourceRead?) = lock.withLock {
-            let current = (listeningFileDescriptor, source)
+        let state: (Int32, DispatchSourceRead?, NSObjectProtocol?)
+            = lock.withLock {
+            let current = (
+                listeningFileDescriptor,
+                source,
+                terminationObserver
+            )
             listeningFileDescriptor = -1
             source = nil
+            terminationObserver = nil
             return current
         }
         state.1?.cancel()
+        if let observer = state.2 {
+            NotificationCenter.default.removeObserver(observer)
+        }
         if state.0 >= 0 {
             shutdown(state.0, SHUT_RDWR)
             close(state.0)
+            endpoint.removeIfOwnedSocket()
         }
-        endpoint.removeIfOwnedSocket()
     }
 
     private func bindAndListen(_ fileDescriptor: Int32) throws {
@@ -190,6 +219,14 @@ struct AgentSocketConnectionProcessor {
     let handler: any AgentEnvelopeHandling
 
     func process(_ fileDescriptor: Int32) {
+        var receiveTimeout = timeval(tv_sec: 1, tv_usec: 0)
+        setsockopt(
+            fileDescriptor,
+            SOL_SOCKET,
+            SO_RCVTIMEO,
+            &receiveTimeout,
+            socklen_t(MemoryLayout.size(ofValue: receiveTimeout))
+        )
         let ack: AgentIngressAck
         do {
             let envelope = try AgentSocketFrameReader(
@@ -225,10 +262,11 @@ struct AgentSocketAckWriter {
             guard let baseAddress = buffer.baseAddress else { return }
             var offset = 0
             while offset < data.count {
-                let written = Darwin.write(
+                let written = Darwin.send(
                     fileDescriptor,
                     baseAddress.advanced(by: offset),
-                    data.count - offset
+                    data.count - offset,
+                    MSG_NOSIGNAL
                 )
                 if written > 0 {
                     offset += written
@@ -366,6 +404,9 @@ struct AgentSocketEndpoint {
             else {
                 throw AgentSocketServerError.unsafeEndpoint
             }
+            guard try !isActiveSocket() else {
+                throw AgentSocketServerError.unsafeEndpoint
+            }
             guard unlink(url.path) == 0 else {
                 throw AgentSocketServerError.endpointPreparationFailed
             }
@@ -387,6 +428,82 @@ struct AgentSocketEndpoint {
 
     private func fileType(_ mode: mode_t) -> mode_t {
         mode & S_IFMT
+    }
+
+    private func isActiveSocket() throws -> Bool {
+        let fileDescriptor = socket(AF_UNIX, SOCK_STREAM, 0)
+        guard fileDescriptor >= 0 else {
+            throw AgentSocketServerError.socketCreationFailed
+        }
+        defer { close(fileDescriptor) }
+        let flags = fcntl(fileDescriptor, F_GETFL)
+        guard flags >= 0,
+              fcntl(
+                  fileDescriptor,
+                  F_SETFL,
+                  flags | O_NONBLOCK
+              ) == 0
+        else {
+            throw AgentSocketServerError.socketCreationFailed
+        }
+
+        var address = sockaddr_un()
+        address.sun_family = sa_family_t(AF_UNIX)
+        let pathBytes = Array(url.path.utf8) + [0]
+        guard pathBytes.count <= MemoryLayout.size(ofValue: address.sun_path)
+        else {
+            throw AgentSocketServerError.unsafeEndpoint
+        }
+        withUnsafeMutableBytes(of: &address.sun_path) {
+            $0.copyBytes(from: pathBytes)
+        }
+        let addressLength = socklen_t(
+            MemoryLayout<sockaddr_un>.offset(of: \.sun_path)!
+                + pathBytes.count
+        )
+        address.sun_len = UInt8(addressLength)
+        let result = withUnsafePointer(to: &address) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                Darwin.connect(fileDescriptor, $0, addressLength)
+            }
+        }
+        if result == 0 {
+            return true
+        }
+        if errno == EINPROGRESS {
+            var descriptor = pollfd(
+                fd: fileDescriptor,
+                events: Int16(POLLOUT),
+                revents: 0
+            )
+            guard poll(&descriptor, 1, 100) > 0 else {
+                throw AgentSocketServerError.endpointPreparationFailed
+            }
+            var socketError: Int32 = 0
+            var socketErrorLength = socklen_t(
+                MemoryLayout.size(ofValue: socketError)
+            )
+            guard getsockopt(
+                fileDescriptor,
+                SOL_SOCKET,
+                SO_ERROR,
+                &socketError,
+                &socketErrorLength
+            ) == 0 else {
+                throw AgentSocketServerError.endpointPreparationFailed
+            }
+            if socketError == 0 {
+                return true
+            }
+            if socketError == ECONNREFUSED || socketError == ENOENT {
+                return false
+            }
+            throw AgentSocketServerError.endpointPreparationFailed
+        }
+        if errno == ECONNREFUSED || errno == ENOENT {
+            return false
+        }
+        throw AgentSocketServerError.endpointPreparationFailed
     }
 }
 

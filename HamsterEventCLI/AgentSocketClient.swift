@@ -84,7 +84,10 @@ struct AgentSocketClient: AgentFrameSending {
     private let maximumWriteChunkByteCount: Int
 
     init(maximumWriteChunkByteCount: Int = .max) {
-        self.maximumWriteChunkByteCount = maximumWriteChunkByteCount
+        self.maximumWriteChunkByteCount = max(
+            1,
+            maximumWriteChunkByteCount
+        )
     }
 
     func send(
@@ -215,13 +218,14 @@ struct AgentSocketClient: AgentFrameSending {
                     on: fileDescriptor,
                     timeout: deadline.remainingMilliseconds()
                 )
-                let count = Darwin.write(
+                let count = Darwin.send(
                     fileDescriptor,
                     baseAddress.advanced(by: offset),
                     min(
                         data.count - offset,
                         maximumWriteChunkByteCount
-                    )
+                    ),
+                    MSG_NOSIGNAL
                 )
                 if count > 0 {
                     offset += count
