@@ -50,6 +50,7 @@ struct MenuBarRootView: View {
     @State private var editingDraft: TodoEditDraft?
     @State private var draggedTodoID: TodoID?
     @State private var dropTargetID: TodoID?
+    @FocusState private var isQuickAddFocused: Bool
 
     init(container: AppContainer) {
         self.container = container
@@ -65,20 +66,23 @@ struct MenuBarRootView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            Divider()
+            Rectangle()
+                .fill(MoraeColor.separator)
+                .frame(height: 0.5)
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 18) {
+                LazyVStack(alignment: .leading, spacing: 0) {
                     if let startupError = container.startupError {
                         startupErrorView(startupError)
                     } else {
                         articleSection
                         yesterdaySection
                         todaySection
-                        emptySection(.recentAgents)
+                        emptySection(.recentAgents, count: nil)
                     }
                 }
-                .padding(.horizontal, MoraeSpacing.large)
-                .padding(.vertical, MoraeSpacing.medium)
+                .padding(.horizontal, MoraeSpacing.compact)
+                .padding(.top, MoraeSpacing.regular)
+                .padding(.bottom, MoraeSpacing.medium)
             }
         }
         .frame(width: 392, height: 700)
@@ -90,16 +94,7 @@ struct MenuBarRootView: View {
     }
 
     private var header: some View {
-        HStack(alignment: .center, spacing: MoraeSpacing.medium) {
-            Image(systemName: "hourglass")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(MoraeColor.accent)
-                .frame(width: 28, height: 28)
-                .background(
-                    MoraeColor.selectedFill,
-                    in: RoundedRectangle(cornerRadius: MoraeRadius.medium)
-                )
-                .accessibilityHidden(true)
+        HStack(alignment: .center, spacing: MoraeSpacing.regular) {
             VStack(alignment: .leading, spacing: 1) {
                 Text("모래")
                     .font(.system(size: 15, weight: .semibold))
@@ -109,45 +104,69 @@ struct MenuBarRootView: View {
             }
             Spacer()
             Button {} label: {
-                Label("오늘 브리핑 만들기", systemImage: "sparkles")
-                    .labelStyle(.iconOnly)
+                HStack(spacing: MoraeSpacing.compact) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 11))
+                        .opacity(0.85)
+                    Text("오늘 브리핑")
+                }
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(
+                MoraeCompactButtonStyle(
+                    variant: .prominent,
+                    horizontalPadding: 9
+                )
+            )
             .disabled(true)
             .help("수동 브리핑은 Sprint 3에서 연결됩니다.")
             SettingsLink {
-                Label("설정", systemImage: "gearshape")
+                Label("설정", systemImage: "ellipsis")
                     .labelStyle(.iconOnly)
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(
+                MoraeIconButtonStyle(
+                    size: MoraeControlMetrics.headerIconButtonSize
+                )
+            )
             .help("설정 열기")
             .accessibilityLabel("설정 열기")
         }
-        .padding(.horizontal, MoraeSpacing.large)
-        .padding(.vertical, 11)
+        .padding(.leading, 14)
+        .padding(.trailing, MoraeSpacing.medium)
+        .padding(.vertical, MoraeSpacing.medium)
     }
 
     private var articleSection: some View {
-        emptySection(.article, count: 0)
+        emptySection(.article, count: "0")
     }
 
     private var yesterdaySection: some View {
         sectionContainer(
             .yesterdayCompleted,
-            count: viewModel.yesterdayCompleted.count
+            count: String(viewModel.yesterdayCompleted.count)
         ) {
             if viewModel.yesterdayCompleted.isEmpty {
                 emptyMessage(for: .yesterdayCompleted)
             } else {
-                ForEach(viewModel.yesterdayCompleted) { item in
-                    HStack {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
-                        Text(item.title)
-                            .lineLimit(2)
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(viewModel.yesterdayCompleted) { item in
+                        HStack(spacing: 9) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 15))
+                                .foregroundStyle(MoraeColor.accent)
+                            Text(item.title)
+                                .font(.system(size: 12.5))
+                                .foregroundStyle(MoraeColor.mutedForeground)
+                                .strikethrough()
+                                .lineLimit(2)
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.horizontal, MoraeSpacing.regular)
+                        .padding(.vertical, MoraeSpacing.compact)
+                        .contentShape(Rectangle())
+                        .accessibilityElement(children: .combine)
+                        .accessibilityLabel("완료, \(item.title)")
                     }
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel("완료, \(item.title)")
                 }
             }
             if !viewModel.yesterdayPending.isEmpty {
@@ -181,10 +200,11 @@ struct MenuBarRootView: View {
     }
 
     private var todaySection: some View {
-        sectionContainer(.todayTodos, count: viewModel.todayTodos.count) {
-            HStack {
+        sectionContainer(.todayTodos, count: todayCountLabel) {
+            HStack(spacing: MoraeSpacing.compact) {
                 TextField("빠른 할 일 추가", text: $quickAddTitle)
-                    .textFieldStyle(.roundedBorder)
+                    .focused($isQuickAddFocused)
+                    .moraeInput(isFocused: isQuickAddFocused)
                     .onSubmit {
                         submitQuickAdd()
                     }
@@ -201,15 +221,20 @@ struct MenuBarRootView: View {
                 } label: {
                     Image(systemName: "plus")
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
+                .buttonStyle(
+                    MoraeIconButtonStyle(
+                        size: MoraeControlMetrics.inputHeight
+                    )
+                )
                 .accessibilityLabel("할 일 저장")
             }
             if viewModel.todayTodos.isEmpty {
                 emptyMessage(for: .todayTodos)
             } else {
-                ForEach(viewModel.todayTodos) { item in
-                    todayTodoRow(item)
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(viewModel.todayTodos) { item in
+                        todayTodoRow(item)
+                    }
                 }
             }
             if let draft = editingDraft {
@@ -363,7 +388,7 @@ struct MenuBarRootView: View {
 
     private func emptySection(
         _ section: MenuBarSection,
-        count: Int? = 0
+        count: String? = "0"
     ) -> some View {
         sectionContainer(section, count: count) {
             emptyMessage(for: section)
@@ -372,31 +397,36 @@ struct MenuBarRootView: View {
 
     private func sectionContainer<Content: View>(
         _ section: MenuBarSection,
-        count: Int? = nil,
+        count: String? = nil,
         @ViewBuilder content: () -> Content
     ) -> some View {
-        VStack(alignment: .leading, spacing: MoraeSpacing.small) {
-            HStack(spacing: MoraeSpacing.small) {
-                Label(section.title, systemImage: section.systemImage)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(MoraeColor.foreground)
+        VStack(alignment: .leading, spacing: MoraeSpacing.compact) {
+            HStack(alignment: .firstTextBaseline, spacing: MoraeSpacing.compact) {
+                Text(section.title)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(MoraeColor.secondaryForeground)
                 Spacer(minLength: MoraeSpacing.small)
                 if let count {
-                    Text(count, format: .number)
-                        .font(.caption2.monospacedDigit())
-                        .foregroundStyle(MoraeColor.secondaryForeground)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(
-                            MoraeColor.subtleFill,
-                            in: Capsule()
-                        )
-                        .accessibilityLabel("\(count)개")
+                    Text(count)
+                        .font(.system(size: 11, weight: .medium).monospacedDigit())
+                        .foregroundStyle(MoraeColor.mutedForeground)
+                        .accessibilityLabel("\(count)개 항목")
                 }
             }
+            .padding(.horizontal, MoraeSpacing.xSmall)
             content()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, MoraeSpacing.small)
+        .padding(.top, MoraeSpacing.compact)
+        .padding(.bottom, MoraeSpacing.regular)
+    }
+
+    private var todayCountLabel: String {
+        let pendingCount = viewModel.todayTodos
+            .filter { $0.status == .pending }
+            .count
+        return "\(pendingCount) / \(viewModel.todayTodos.count)"
     }
 
     private var localizedToday: String {

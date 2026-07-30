@@ -18,21 +18,36 @@ struct TodoRowView: View {
     @State private var isHovered = false
 
     var body: some View {
-        HStack(alignment: .center, spacing: MoraeSpacing.small) {
+        HStack(alignment: .center, spacing: MoraeSpacing.xSmall) {
             dragHandle
             completionButton
             titleAndMetadata
             Spacer(minLength: MoraeSpacing.xSmall)
             actionButtons
         }
-        .padding(.horizontal, MoraeSpacing.small)
-        .padding(.vertical, 7)
+        .padding(.leading, MoraeSpacing.xSmall)
+        .padding(.trailing, MoraeSpacing.small)
+        .padding(.vertical, 5)
         .background(
             isHovered ? MoraeColor.subtleFill : .clear,
-            in: RoundedRectangle(cornerRadius: MoraeRadius.medium)
+            in: RoundedRectangle(cornerRadius: MoraeRadius.control)
         )
         .contentShape(Rectangle())
         .onHover { isHovered = $0 }
+        .focusable(item.status == .pending)
+        .onMoveCommand { direction in
+            guard item.status == .pending else {
+                return
+            }
+            switch direction {
+            case .up where canMoveUp:
+                onMoveUp()
+            case .down where canMoveDown:
+                onMoveDown()
+            default:
+                break
+            }
+        }
         .opacity(isDragging ? 0.46 : 1)
         .overlay(alignment: .top) {
             if showsDropIndicator {
@@ -54,15 +69,32 @@ struct TodoRowView: View {
             Button("편집", action: onEdit)
             Button("삭제", action: onDelete)
         }
+        .contextMenu {
+            if item.status == .pending {
+                Button("위로 이동", systemImage: "arrow.up", action: onMoveUp)
+                    .disabled(!canMoveUp)
+                Button("아래로 이동", systemImage: "arrow.down", action: onMoveDown)
+                    .disabled(!canMoveDown)
+                Divider()
+            }
+            Button("편집", systemImage: "pencil", action: onEdit)
+            Button(
+                "삭제",
+                systemImage: "trash",
+                role: .destructive,
+                action: onDelete
+            )
+        }
     }
 
     @ViewBuilder
     private var dragHandle: some View {
         if let dragIdentifier {
             Image(systemName: "circle.grid.2x3.fill")
-                .font(.system(size: 11))
+                .font(.system(size: 10))
                 .foregroundStyle(MoraeColor.secondaryForeground)
-                .frame(width: 16, height: 24)
+                .frame(width: 18, height: 24)
+                .opacity(isHovered ? 0.62 : 0.32)
                 .contentShape(Rectangle())
                 .onDrag {
                     onDragStarted()
@@ -80,13 +112,13 @@ struct TodoRowView: View {
                     ? "checkmark.circle.fill"
                     : "circle"
             )
-            .font(.system(size: 15, weight: .medium))
+            .font(.system(size: 16, weight: .medium))
             .foregroundStyle(
                 item.status == .completed
                     ? MoraeColor.accent
                     : MoraeColor.secondaryForeground
             )
-            .frame(width: 22, height: 22)
+            .frame(width: 16, height: 16)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -107,7 +139,7 @@ struct TodoRowView: View {
                         .accessibilityLabel("중요")
                 }
                 Text(item.title)
-                    .font(.subheadline)
+                    .font(.system(size: 12.5))
                     .strikethrough(item.status == .completed)
                     .foregroundStyle(
                         item.status == .completed
@@ -125,53 +157,56 @@ struct TodoRowView: View {
                     .foregroundStyle(MoraeColor.secondaryForeground)
             }
         }
+        .padding(.leading, 5)
     }
 
     private var actionButtons: some View {
-        HStack(spacing: 6) {
-            if item.status == .pending {
-                rowButton(
-                    systemImage: "arrow.up",
-                    accessibilityLabel: "\(item.title) 위로 이동",
-                    isDisabled: !canMoveUp,
-                    action: onMoveUp
-                )
-                rowButton(
-                    systemImage: "arrow.down",
-                    accessibilityLabel: "\(item.title) 아래로 이동",
-                    isDisabled: !canMoveDown,
-                    action: onMoveDown
-                )
-            }
-            rowButton(
+        HStack(spacing: 1) {
+            TodoRowActionButton(
                 systemImage: "pencil",
                 accessibilityLabel: "\(item.title) 편집",
                 action: onEdit
             )
-            rowButton(
+            TodoRowActionButton(
                 systemImage: "trash",
                 accessibilityLabel: "\(item.title) 삭제",
+                isDestructive: true,
                 action: onDelete
             )
         }
-        .controlSize(.small)
-        .opacity(isHovered ? 1 : 0.68)
+        .opacity(isHovered ? 1 : 0.60)
     }
+}
 
-    private func rowButton(
-        systemImage: String,
-        accessibilityLabel: String,
-        isDisabled: Bool = false,
-        action: @escaping () -> Void
-    ) -> some View {
+private struct TodoRowActionButton: View {
+    let systemImage: String
+    let accessibilityLabel: String
+    var isDestructive = false
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
         Button(action: action) {
             Image(systemName: systemImage)
-                .font(.caption)
-                .frame(width: 18, height: 18)
+                .font(.system(size: 12))
+                .frame(
+                    width: MoraeControlMetrics.rowIconButtonSize,
+                    height: MoraeControlMetrics.rowIconButtonSize
+                )
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .disabled(isDisabled)
+        .foregroundStyle(
+            isDestructive && isHovered
+                ? MoraeColor.error
+                : MoraeColor.secondaryForeground
+        )
+        .background(
+            isHovered ? MoraeColor.chipFill : .clear,
+            in: RoundedRectangle(cornerRadius: MoraeRadius.small)
+        )
+        .onHover { isHovered = $0 }
         .help(accessibilityLabel)
         .accessibilityLabel(accessibilityLabel)
     }

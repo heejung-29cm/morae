@@ -327,25 +327,30 @@ final class MoraeAppTests: XCTestCase {
     }
 
     @MainActor
-    func testMoraeAccentResolvesToDifferentLightAndDarkColors() throws {
+    func testMoraeBrandColorsResolveForBothSystemAppearances() throws {
         let accent = try XCTUnwrap(
             NSColor(
                 named: NSColor.Name("MoraeAccent"),
                 bundle: .main
             )
         )
+        let onAccent = try XCTUnwrap(
+            NSColor(
+                named: NSColor.Name("MoraeOnAccent"),
+                bundle: .main
+            )
+        )
         let lightAppearance = try XCTUnwrap(NSAppearance(named: .aqua))
         let darkAppearance = try XCTUnwrap(NSAppearance(named: .darkAqua))
-        var light: NSColor?
-        var dark: NSColor?
-        lightAppearance.performAsCurrentDrawingAppearance {
-            light = accent.usingColorSpace(.sRGB)
-        }
-        darkAppearance.performAsCurrentDrawingAppearance {
-            dark = accent.usingColorSpace(.sRGB)
-        }
 
-        XCTAssertNotEqual(light, dark)
+        XCTAssertNotEqual(
+            resolvedColor(accent, appearance: lightAppearance),
+            resolvedColor(accent, appearance: darkAppearance)
+        )
+        XCTAssertNotEqual(
+            resolvedColor(onAccent, appearance: lightAppearance),
+            resolvedColor(onAccent, appearance: darkAppearance)
+        )
     }
 
     func testMenuBarStateKindsProvideAccessibleFallbacks() {
@@ -357,6 +362,17 @@ final class MoraeAppTests: XCTestCase {
                     && !$0.accessibilityPrefix.isEmpty
             }
         )
+    }
+
+    private func resolvedColor(
+        _ color: NSColor,
+        appearance: NSAppearance
+    ) -> NSColor? {
+        var resolved: NSColor?
+        appearance.performAsCurrentDrawingAppearance {
+            resolved = color.usingColorSpace(.sRGB)
+        }
+        return resolved
     }
 }
 

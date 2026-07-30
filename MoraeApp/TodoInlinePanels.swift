@@ -35,13 +35,19 @@ struct TodoEditorView: View {
                 Spacer()
                 Button("편집 취소", systemImage: "xmark", action: onCancel)
                     .labelStyle(.iconOnly)
-                    .buttonStyle(.plain)
+                    .buttonStyle(
+                        MoraeIconButtonStyle(
+                            size: MoraeControlMetrics.rowIconButtonSize,
+                            showsBackground: false
+                        )
+                    )
                     .help("편집 취소")
             }
 
             VStack(alignment: .leading, spacing: MoraeSpacing.small) {
                 TextField("제목", text: $draft.title)
                     .focused($focusedField, equals: .title)
+                    .moraeInput(isFocused: focusedField == .title)
                     .accessibilityLabel("할 일 제목")
                 Toggle("중요한 할 일", isOn: Binding(
                     get: { draft.priority == .important },
@@ -50,27 +56,35 @@ struct TodoEditorView: View {
                 HStack(spacing: MoraeSpacing.small) {
                     TextField("예상 시간(분)", text: $draft.estimatedMinutes)
                         .focused($focusedField, equals: .estimatedMinutes)
+                        .moraeInput(
+                            isFocused: focusedField == .estimatedMinutes
+                        )
                     TextField("관련 URL", text: $draft.relatedURL)
                         .focused($focusedField, equals: .relatedURL)
+                        .moraeInput(isFocused: focusedField == .relatedURL)
                 }
                 TextField("프로젝트 경로", text: $draft.projectPath)
                     .focused($focusedField, equals: .projectPath)
+                    .moraeInput(isFocused: focusedField == .projectPath)
             }
-            .textFieldStyle(.roundedBorder)
 
-            HStack {
+            HStack(spacing: MoraeSpacing.compact) {
                 Spacer()
                 Button("취소", role: .cancel, action: onCancel)
                     .keyboardShortcut(.cancelAction)
+                    .buttonStyle(
+                        MoraeCompactButtonStyle(variant: .chip)
+                    )
                 Button("저장") {
                     Task {
                         await onSave(draft)
                     }
                 }
                 .keyboardShortcut(.defaultAction)
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(
+                    MoraeCompactButtonStyle(variant: .prominent)
+                )
             }
-            .controlSize(.small)
         }
         .padding(MoraeSpacing.medium)
         .background(
@@ -113,14 +127,22 @@ struct InlineDeleteConfirmationView: View {
                 Text("삭제 후 5초 동안 실행 취소할 수 있습니다.")
                     .font(.caption)
                     .foregroundStyle(MoraeColor.secondaryForeground)
-                HStack {
+                HStack(spacing: MoraeSpacing.compact) {
                     Spacer()
                     Button("취소", role: .cancel, action: onCancel)
                         .keyboardShortcut(.cancelAction)
                         .focused($isCancelFocused)
+                        .buttonStyle(
+                            MoraeCompactButtonStyle(variant: .chip)
+                        )
                     Button("삭제", role: .destructive, action: onDelete)
+                        .buttonStyle(
+                            MoraeCompactButtonStyle(
+                                variant: .chip,
+                                foreground: MoraeColor.error
+                            )
+                        )
                 }
-                .controlSize(.small)
             }
         }
         .padding(MoraeSpacing.medium)
@@ -154,8 +176,13 @@ struct UndoDeleteBanner: View {
             Button("실행 취소", action: onUndo)
                 .font(.caption.weight(.semibold))
                 .keyboardShortcut("z", modifiers: .command)
-                .buttonStyle(.plain)
-                .foregroundStyle(MoraeColor.accent)
+                .buttonStyle(
+                    MoraeCompactButtonStyle(
+                        variant: .chip,
+                        foreground: MoraeColor.accent,
+                        horizontalPadding: MoraeSpacing.small
+                    )
+                )
         }
         .padding(.horizontal, MoraeSpacing.medium)
         .padding(.vertical, 9)

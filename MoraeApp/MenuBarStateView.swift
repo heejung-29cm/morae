@@ -43,49 +43,83 @@ struct MenuBarStateView: View {
         self.systemImage = systemImage ?? kind.defaultSystemImage
     }
 
+    @ViewBuilder
     var body: some View {
+        if kind == .empty {
+            compactEmptyState
+        } else {
+            feedbackState
+        }
+    }
+
+    private var compactEmptyState: some View {
+        HStack(spacing: MoraeSpacing.small) {
+            Circle()
+                .fill(MoraeColor.mutedForeground)
+                .frame(width: 5, height: 5)
+                .accessibilityHidden(true)
+            Text(message)
+                .font(.system(size: 11.5))
+                .foregroundStyle(MoraeColor.mutedForeground)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, MoraeSpacing.regular)
+        .padding(.vertical, 11)
+        .background(
+            MoraeColor.subtleFill,
+            in: RoundedRectangle(cornerRadius: MoraeRadius.medium)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: MoraeRadius.medium)
+                .stroke(
+                    MoraeColor.controlBorder,
+                    style: StrokeStyle(lineWidth: 0.5, dash: [3, 3])
+                )
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityText)
+    }
+
+    private var feedbackState: some View {
         HStack(alignment: .top, spacing: MoraeSpacing.medium) {
             Image(systemName: systemImage)
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(tint)
-                .frame(width: 28, height: 28)
+                .frame(width: 24, height: 24)
                 .background(
                     tint.opacity(0.10),
-                    in: RoundedRectangle(cornerRadius: MoraeRadius.medium)
+                    in: RoundedRectangle(cornerRadius: MoraeRadius.control)
                 )
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 3) {
                 if let title {
                     Text(title)
-                        .font(.subheadline.weight(.semibold))
+                        .font(.system(size: 12.5, weight: .semibold))
                         .foregroundStyle(MoraeColor.foreground)
                 }
                 Text(message)
-                    .font(.subheadline)
-                    .foregroundStyle(
-                        kind == .empty
-                            ? MoraeColor.secondaryForeground
-                            : MoraeColor.foreground
-                    )
+                    .font(.system(size: 12))
+                    .foregroundStyle(MoraeColor.foreground)
                     .fixedSize(horizontal: false, vertical: true)
                 if let recovery {
                     Text(recovery)
-                        .font(.caption)
+                        .font(.system(size: 11.5))
                         .foregroundStyle(MoraeColor.secondaryForeground)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(MoraeSpacing.medium)
+        .padding(MoraeSpacing.regular)
         .background(
             background,
-            in: RoundedRectangle(cornerRadius: MoraeRadius.large)
+            in: RoundedRectangle(cornerRadius: MoraeRadius.medium)
         )
         .overlay {
-            RoundedRectangle(cornerRadius: MoraeRadius.large)
-                .stroke(tint.opacity(kind == .empty ? 0.08 : 0.18))
+            RoundedRectangle(cornerRadius: MoraeRadius.medium)
+                .stroke(tint.opacity(0.18), lineWidth: 0.5)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityText)
