@@ -18,6 +18,7 @@ enum DefaultFeedError: Error, Equatable, Sendable {
     case invalidID(String)
     case invalidURL(String)
     case insecureURL(String)
+    case invalidSelectionWeight(Int)
 }
 
 struct DefaultFeedDefinition: Decodable, Equatable, Sendable {
@@ -25,6 +26,7 @@ struct DefaultFeedDefinition: Decodable, Equatable, Sendable {
     let name: String
     let feedURL: String
     let isOfficial: Bool
+    let selectionWeight: Int?
 
     func source(at date: Date) throws -> FeedSource {
         guard let id = UUID(uuidString: id) else {
@@ -36,11 +38,16 @@ struct DefaultFeedDefinition: Decodable, Equatable, Sendable {
         guard url.scheme?.lowercased() == "https" else {
             throw DefaultFeedError.insecureURL(feedURL)
         }
+        let selectionWeight = selectionWeight ?? 0
+        guard (0...100).contains(selectionWeight) else {
+            throw DefaultFeedError.invalidSelectionWeight(selectionWeight)
+        }
         return FeedSource(
             id: id,
             name: name,
             feedURL: url,
             isOfficial: isOfficial,
+            selectionWeight: selectionWeight,
             createdAt: date,
             updatedAt: date
         )
@@ -81,6 +88,7 @@ struct FeedSourceRecord:
     let name: String
     let feedURL: String
     let isOfficial: Bool
+    let selectionWeight: Int
     let isEnabled: Bool
     let lastCheckedAtMs: Int64?
     let createdAtMs: Int64
@@ -91,6 +99,7 @@ struct FeedSourceRecord:
         case name
         case feedURL = "feed_url"
         case isOfficial = "is_official"
+        case selectionWeight = "selection_weight"
         case isEnabled = "is_enabled"
         case lastCheckedAtMs = "last_checked_at_ms"
         case createdAtMs = "created_at_ms"
@@ -102,6 +111,7 @@ struct FeedSourceRecord:
         name = source.name
         feedURL = source.feedURL.absoluteString
         isOfficial = source.isOfficial
+        selectionWeight = source.selectionWeight
         isEnabled = source.isEnabled
         lastCheckedAtMs = source.lastCheckedAt?.unixMilliseconds
         createdAtMs = source.createdAt.unixMilliseconds
@@ -120,6 +130,7 @@ struct FeedSourceRecord:
             name: name,
             feedURL: feedURL,
             isOfficial: isOfficial,
+            selectionWeight: selectionWeight,
             isEnabled: isEnabled,
             lastCheckedAt: lastCheckedAtMs.map(Date.init(unixMilliseconds:)),
             createdAt: Date(unixMilliseconds: createdAtMs),
@@ -129,7 +140,13 @@ struct FeedSourceRecord:
 }
 
 final class GRDBFeedSourceRepository: FeedSourceRepository, @unchecked Sendable {
-    private static let seedKey = "default_feeds_seeded"
+    private static let seedKey = "default_feeds_seeded_v2"
+    private static let legacyDefaultIDs = [
+        "8b064c57-30c5-4b87-863f-edb32940237a",
+        "97014c67-3ffe-4701-a792-c07dccbc0c3c",
+        "8fa75519-5664-45ca-a687-5be871bb5f28",
+        "b487dcfb-a5cd-4400-bf33-6da825f4db06",
+    ]
     private let writer: any DatabaseWriter
 
     init(database: AppDatabase) {
@@ -195,8 +212,43 @@ final class GRDBFeedSourceRepository: FeedSourceRepository, @unchecked Sendable 
         guard seeded == nil else {
             return
         }
+        try database.execute(
+            sql: """
+                UPDATE feed_sources
+                SET is_enabled = 0,
+                    updated_at_ms = ?
+                WHERE id IN (?, ?, ?, ?)
+                """,
+            arguments: [
+                sources.first?.updatedAt.unixMilliseconds
+                    ?? Date().unixMilliseconds,
+                legacyDefaultIDs[0],
+                legacyDefaultIDs[1],
+                legacyDefaultIDs[2],
+                legacyDefaultIDs[3],
+            ]
+        )
         for source in sources {
-            try FeedSourceRecord(source: source).insert(database)
+            let record = FeedSourceRecord(source: source)
+            try record.insert(database, onConflict: .ignore)
+            try database.execute(
+                sql: """
+                    UPDATE feed_sources
+                    SET name = ?,
+                        is_official = ?,
+                        selection_weight = ?,
+                        is_enabled = 1,
+                        updated_at_ms = ?
+                    WHERE feed_url = ?
+                    """,
+                arguments: [
+                    source.name,
+                    source.isOfficial,
+                    source.selectionWeight,
+                    source.updatedAt.unixMilliseconds,
+                    source.feedURL.absoluteString,
+                ]
+            )
         }
         try database.execute(
             sql: "INSERT INTO app_metadata (key, value) VALUES (?, ?)",

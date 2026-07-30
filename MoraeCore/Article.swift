@@ -5,6 +5,7 @@ public struct FeedSource: Identifiable, Equatable, Sendable {
     public let name: String
     public let feedURL: URL
     public let isOfficial: Bool
+    public let selectionWeight: Int
     public let isEnabled: Bool
     public let lastCheckedAt: Date?
     public let createdAt: Date
@@ -15,6 +16,7 @@ public struct FeedSource: Identifiable, Equatable, Sendable {
         name: String,
         feedURL: URL,
         isOfficial: Bool,
+        selectionWeight: Int = 0,
         isEnabled: Bool = true,
         lastCheckedAt: Date? = nil,
         createdAt: Date,
@@ -24,6 +26,7 @@ public struct FeedSource: Identifiable, Equatable, Sendable {
         self.name = name
         self.feedURL = feedURL
         self.isOfficial = isOfficial
+        self.selectionWeight = selectionWeight
         self.isEnabled = isEnabled
         self.lastCheckedAt = lastCheckedAt
         self.createdAt = createdAt
@@ -39,6 +42,7 @@ public struct FeedCandidate: Hashable, Sendable {
     public let title: String
     public let publishedAt: Date?
     public let isOfficialSource: Bool
+    public let selectionWeight: Int
 
     public init(
         sourceID: UUID,
@@ -47,7 +51,8 @@ public struct FeedCandidate: Hashable, Sendable {
         articleURL: URL,
         title: String,
         publishedAt: Date?,
-        isOfficialSource: Bool
+        isOfficialSource: Bool,
+        selectionWeight: Int = 0
     ) {
         self.sourceID = sourceID
         self.sourceName = sourceName
@@ -56,6 +61,7 @@ public struct FeedCandidate: Hashable, Sendable {
         self.title = title
         self.publishedAt = publishedAt
         self.isOfficialSource = isOfficialSource
+        self.selectionWeight = selectionWeight
     }
 }
 

@@ -72,6 +72,13 @@ final class AppDatabase: @unchecked Sendable {
                 )
                 """)
         }
+        migrator.registerMigration("v4_feed_selection_weight") { database in
+            try database.execute(sql: """
+                ALTER TABLE feed_sources
+                ADD COLUMN selection_weight INTEGER NOT NULL DEFAULT 0
+                    CHECK(selection_weight BETWEEN 0 AND 100)
+                """)
+        }
         return migrator
     }
 }

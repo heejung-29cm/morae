@@ -1,26 +1,30 @@
 [
   {
-    "id": "8b064c57-30c5-4b87-863f-edb32940237a",
-    "name": "MDN Blog",
-    "feedURL": "https://developer.mozilla.org/en-US/blog/rss.xml",
-    "isOfficial": true
+    "id": "c30cf4c3-2e49-49ab-a49f-4f6324657cf8",
+    "name": "GeekNews",
+    "feedURL": "https://news.hada.io/rss/news",
+    "isOfficial": true,
+    "selectionWeight": 20
   },
   {
-    "id": "97014c67-3ffe-4701-a792-c07dccbc0c3c",
-    "name": "web.dev",
-    "feedURL": "https://web.dev/static/blog/feed.xml",
-    "isOfficial": true
+    "id": "7065e141-9c37-456c-84f5-a7d30a59bdcb",
+    "name": "FE News",
+    "feedURL": "https://fenews.substack.com/feed",
+    "isOfficial": true,
+    "selectionWeight": 55
   },
   {
-    "id": "8fa75519-5664-45ca-a687-5be871bb5f28",
-    "name": "Chrome for Developers",
-    "feedURL": "https://developer.chrome.com/static/blog/feed.xml",
-    "isOfficial": true
+    "id": "8c0c262f-f382-4fe4-a2a4-38c486b92055",
+    "name": "Frontend Focus",
+    "feedURL": "https://frontendfoc.us/rss/",
+    "isOfficial": true,
+    "selectionWeight": 45
   },
   {
-    "id": "b487dcfb-a5cd-4400-bf33-6da825f4db06",
-    "name": "React Blog",
-    "feedURL": "https://react.dev/rss.xml",
-    "isOfficial": true
+    "id": "50ee594a-9d5d-413e-88c8-25756a295def",
+    "name": "JavaScript Weekly",
+    "feedURL": "https://javascriptweekly.com/rss/",
+    "isOfficial": true,
+    "selectionWeight": 45
   }
 ]

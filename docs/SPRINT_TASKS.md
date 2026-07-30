@@ -1,6 +1,6 @@
 # 모래 MVP Sprint Tasks
 
-> 상태: Sprint 0·1·1.5·2·3 완료 / Sprint 4~6 준비 완료
+> 상태: Sprint 0·1·1.5·2·3·3.1 완료 / Sprint 4~6 준비 완료
 > 최종 수정: 2026-07-30
 > 기준 문서: [README](../README.md), [HLD](HLD.md), [LLD](LLD.md), [ADR](adr/)
 
@@ -34,6 +34,7 @@
 | Sprint 1.5 | 완료 | 소프트 블루 UI, light/dark, inline panel, pointer reorder |
 | Sprint 2 | 완료 | 기본 피드, 제한된 HTTP, RSS/Atom, 정규화·선정·Article 저장소 |
 | Sprint 3 | 완료 | 수동 생성, 무재시도, 최우선 할 일 질문, 최신 결과 복원 |
+| Sprint 3.1 | 완료 | 큐레이션 기본 피드 전환, 소스 가중치, 기존 설치 migration |
 | Sprint 4~6 | 예정 | Agent IPC·알림, 설정·배포 |
 
 완료 표시는 현재 브랜치의 구현과 자동화 테스트를 기준으로 합니다. 후속
@@ -117,11 +118,12 @@ Sprint 종료 데모:
 
 ## 4. Sprint 2 — 아티클 메타데이터 수집·선정
 
-목표: 공식 피드에서 제목, 링크, 출처와 게시일을 읽어 최근 아티클 한 개를 선정합니다.
+목표: 신뢰할 수 있는 피드에서 제목, 링크, 출처와 게시일을 읽어 최근
+아티클 한 개를 선정합니다.
 
 | ID | 크기 | 태스크 | 선행 | 완료·검토 기준 |
 | --- | --- | --- | --- | --- |
-| S2-01 | S | 기본 피드 fixture와 seed 구현 | S0-09 | MDN, web.dev, Chrome, React의 검증된 RSS/Atom URL을 설정 파일에 두고 최초 실행에만 seed합니다. |
+| S2-01 | S | 기본 피드 fixture와 seed 구현 | S0-09 | 검증된 HTTPS RSS/Atom URL을 설정 파일에 두고 versioned marker로 seed합니다. |
 | S2-02 | S | 제한된 URLSession HTTPClient 구현 | S0-10 | HTTPS, timeout, redirect, response size, cookie/credential 비사용 정책을 Stub URLProtocol로 검증합니다. |
 | S2-03 | M | FeedKit RSS 메타데이터 mapping 구현 | S2-01, S2-02 | 자체 제작 RSS fixture의 제목, 링크, 출처와 게시일을 `FeedCandidate`로 변환하고 필수값 validation과 날짜 실패 처리를 테스트합니다. |
 | S2-04 | M | FeedKit Atom 메타데이터 mapping 구현 | S2-01, S2-02 | 자체 제작 Atom fixture의 제목, 링크, 출처와 게시일을 같은 중간 모델로 변환하며 summary/content는 모델에 포함하지 않습니다. |
@@ -176,6 +178,18 @@ Sprint 종료 데모:
   브리핑 복원을 검증합니다.
 - 직접 확인은 [Sprint 3 데모 체크리스트](SPRINT_3_DEMO_CHECKLIST.md)를
   따릅니다.
+
+## 5.1 Sprint 3.1 — 추천 소스 품질
+
+목표: 제품 공식 공지보다 사람이 선별한 개발·프론트엔드 읽을거리를
+우선 추천합니다.
+
+| ID | 크기 | 태스크 | 선행 | 완료·검토 기준 |
+| --- | --- | --- | --- | --- |
+| S3.1-01 | S | 큐레이션 기본 피드 전환 | S2-01 | GeekNews, FE News, Frontend Focus, JavaScript Weekly 공식 피드를 기본으로 사용합니다. |
+| S3.1-02 | S | 소스 선정 가중치 | S2-07 | `selectionWeight`가 파싱·중복 제거 후에도 보존되고 최신성보다 높은 큐레이션 후보를 선택할 수 있습니다. |
+| S3.1-03 | S | 기존 설치 기본 피드 전환 | S3.1-01 | v2 marker 적용 시 기존 네 기본 피드만 비활성화하고 새 기본 피드를 한 번 추가하며 사용자 정의 피드를 유지합니다. |
+| S3.1-04 | XS | 추천 소스 ADR·회귀 검증 | S3.1-02, S3.1-03 | ADR-0013과 코드·문서가 일치하고 전체 테스트가 통과합니다. |
 
 ## 6. Sprint 4 — 에이전트 IPC
 
@@ -292,4 +306,4 @@ Sprint 종료 데모:
 
 | 항목 | 상태 | 확인 결과 |
 | --- | --- | --- |
-| 공식 피드 URL·이용 정책 | 완료 (2026-07-29) | MDN, web.dev, Chrome for Developers, React 공식 HTTPS 피드의 XML과 첫 글 `title`, `link`, `pubDate`를 확인했습니다. 제목·링크·출처·게시일만 사용하는 정책을 확정했습니다. |
+| 큐레이션 피드 URL·이용 정책 | 완료 (2026-07-30) | GeekNews, FE News, Frontend Focus, JavaScript Weekly의 공식 HTTPS 피드와 XML을 확인했습니다. 제목·링크·출처·게시일만 사용하는 정책을 유지합니다. |

@@ -4,7 +4,7 @@ import XCTest
 @testable import MoraeApp
 
 final class FeedSourceRepositoryTests: XCTestCase {
-    func testDefaultFeedFixtureContainsVerifiedOfficialSources() throws {
+    func testDefaultFeedFixtureContainsCuratedSourcesAndWeights() throws {
         let url = try XCTUnwrap(
             Bundle(for: Self.self).url(
                 forResource: "DefaultFeeds",
@@ -18,10 +18,19 @@ final class FeedSourceRepositoryTests: XCTestCase {
 
         XCTAssertEqual(
             sources.map(\.name),
-            ["MDN Blog", "web.dev", "Chrome for Developers", "React Blog"]
+            [
+                "GeekNews",
+                "FE News",
+                "Frontend Focus",
+                "JavaScript Weekly",
+            ]
         )
         XCTAssertTrue(sources.allSatisfy(\.isOfficial))
         XCTAssertTrue(sources.allSatisfy { $0.feedURL.scheme == "https" })
+        XCTAssertEqual(
+            sources.map(\.selectionWeight),
+            [20, 55, 45, 45]
+        )
     }
 
     func testSeedRunsOnlyOnceEvenAfterSourcesAreDeleted() async throws {
@@ -62,6 +71,66 @@ final class FeedSourceRepositoryTests: XCTestCase {
         XCTAssertEqual(checkedSource?.lastCheckedAt, checkedAt)
     }
 
+    func testV2SeedDisablesLegacyDefaultsAndKeepsCustomSource()
+        async throws
+    {
+        let database = try AppDatabase.inMemory()
+        let repository = GRDBFeedSourceRepository(database: database)
+        let instant = Date(unixMilliseconds: 1_775_039_400_000)
+        let legacy = FeedSource(
+            id: UUID(
+                uuidString: "8b064c57-30c5-4b87-863f-edb32940237a"
+            )!,
+            name: "MDN Blog",
+            feedURL: URL(
+                string: "https://developer.mozilla.org/en-US/blog/rss.xml"
+            )!,
+            isOfficial: true,
+            createdAt: instant,
+            updatedAt: instant
+        )
+        let custom = FeedSource(
+            id: UUID(),
+            name: "Custom",
+            feedURL: URL(string: "https://custom.invalid/feed.xml")!,
+            isOfficial: false,
+            createdAt: instant,
+            updatedAt: instant
+        )
+        try await database.writer.write { database in
+            try FeedSourceRecord(source: legacy).insert(database)
+            try FeedSourceRecord(source: custom).insert(database)
+            try database.execute(
+                sql: """
+                    INSERT INTO app_metadata (key, value)
+                    VALUES ('default_feeds_seeded', '1')
+                    """
+            )
+        }
+        let defaultFeedsURL = try XCTUnwrap(
+            Bundle(for: Self.self).url(
+                forResource: "DefaultFeeds",
+                withExtension: "json"
+            )
+        )
+        let curated = try DefaultFeedLoader.decode(
+            data: try Data(contentsOf: defaultFeedsURL),
+            at: instant
+        )
+
+        try await repository.seedDefaults(curated)
+
+        let enabled = try await repository.enabledSources()
+        XCTAssertTrue(enabled.contains(where: { $0.name == "Custom" }))
+        XCTAssertFalse(enabled.contains(where: { $0.name == "MDN Blog" }))
+        XCTAssertEqual(
+            Set(enabled.map(\.name)).intersection(
+                ["GeekNews", "FE News", "Frontend Focus", "JavaScript Weekly"]
+            ),
+            ["GeekNews", "FE News", "Frontend Focus", "JavaScript Weekly"]
+        )
+    }
+
     private var fixtureData: Data {
         Data(
             """
@@ -70,7 +139,8 @@ final class FeedSourceRepositoryTests: XCTestCase {
                 "id": "4f1188e7-d0be-458b-aebe-85c4a8c6946c",
                 "name": "Fixture",
                 "feedURL": "https://fixture.invalid/feed.xml",
-                "isOfficial": true
+                "isOfficial": true,
+                "selectionWeight": 30
               }
             ]
             """.utf8

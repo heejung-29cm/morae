@@ -69,6 +69,7 @@ public struct ArticleSelector: Sendable {
         return freshnessScore(candidate.publishedAt, now: now)
             + interestScore(candidate.title, interests: interests)
             + (candidate.isOfficialSource ? 15 : 0)
+            + min(max(candidate.selectionWeight, 0), 100)
             + (readURLs.contains(candidate.articleURL) ? 0 : 10)
             - (
                 !suppressRecentPenalty

@@ -31,9 +31,9 @@ macOS 바탕화면에서 매일의 지식, 업무 계획, AI 에이전트 작업
   같은 항목의 중복 이월을 막습니다.
 - 소프트 블루 accent, 시스템 light/dark mode, inline 편집·삭제·undo와
   공통 empty/error/validation UI가 적용됐습니다.
-- MDN, web.dev, Chrome for Developers와 React Blog의 기본 피드를 최초
-  실행에 한 번 seed합니다. 제한된 HTTPS client와 RSS/Atom 메타데이터
-  parser가 제목·링크·출처·게시일만 읽습니다.
+- GeekNews, FE News, Frontend Focus와 JavaScript Weekly의 큐레이션
+  피드를 기본으로 사용합니다. 제한된 HTTPS client와 RSS/Atom
+  메타데이터 parser가 제목·링크·출처·게시일만 읽습니다.
 - canonical URL 중복 제거, 최신성·관심사·공식 출처·읽음·최근 추천
   이력을 반영한 결정론적 아티클 선정과 로컬 Article 저장소가
   구현됐습니다.
@@ -42,8 +42,8 @@ macOS 바탕화면에서 매일의 지식, 업무 계획, AI 에이전트 작업
   부분·전체 실패, 중복 클릭 차단과 재시작 후 최신 결과 복원을 지원합니다.
 - 피드 자동 재시도나 재시도 버튼은 없으며 앱 실행과 메뉴 열기만으로
   네트워크 요청을 시작하지 않습니다.
-- 전체 scheme의 자동화 테스트 74개가 통과합니다 (`MoraeApp` 57개,
-  `MoraeCore` 16개, `HamsterEventCLI` 1개).
+- 전체 scheme의 자동화 테스트는 76개입니다 (`MoraeApp` 58개,
+  `MoraeCore` 17개, `HamsterEventCLI` 1개).
 
 에이전트 영역은 아직 empty state입니다. 에이전트 IPC·알림, 실제 설정
 화면과 DMG 출시는 Sprint 4~6 범위입니다. 상세 진행 상태는
@@ -91,7 +91,7 @@ WidgetKit 위젯은 macOS가 갱신 횟수를 관리하므로 실시간 상태 �
 
 오늘의 프론트엔드
 React의 새로운 캐시 전략
-React Blog · 원문 보기
+GeekNews · 원문 보기
 
 어제 완료
 ✓ 상품 목록 렌더링 개선
@@ -135,12 +135,13 @@ MVP에서 알림을 누르면 모래의 최근 에이전트 기록 목록을 엽
 
 #### 수집
 
-초기 버전은 신뢰할 수 있는 공식 블로그와 RSS/Atom 피드만 사용합니다.
+초기 버전은 사람이 선별한 개발·프론트엔드 큐레이션의 공식 RSS/Atom
+피드를 우선 사용합니다.
 
-- [MDN Blog](https://developer.mozilla.org/en-US/blog/rss.xml)
-- [web.dev](https://web.dev/static/blog/feed.xml)
-- [Chrome for Developers](https://developer.chrome.com/static/blog/feed.xml)
-- [React Blog](https://react.dev/rss.xml)
+- [GeekNews](https://news.hada.io/rss/news)
+- [FE News](https://fenews.substack.com/feed)
+- [Frontend Focus](https://frontendfoc.us/rss/)
+- [JavaScript Weekly](https://javascriptweekly.com/rss/)
 - 사용자가 직접 추가한 RSS/Atom 피드
 
 피드는 사용자가 메뉴 막대의 "오늘 브리핑 만들기" 버튼을 누를 때 한 번만 확인합니다. MVP에서는 예약 폴링이나 백그라운드 수집을 하지 않습니다.
@@ -153,6 +154,7 @@ MVP에서 알림을 누르면 모래의 최근 에이전트 기록 목록을 엽
 - 사용자가 설정한 관심 분야
 - 이미 읽었거나 추천한 글인지 여부
 - 공식 출처 여부
+- 기본 큐레이션 소스의 품질 가중치
 
 #### 표시 결과
 
@@ -558,7 +560,8 @@ MVP에서 제외합니다.
 
 - MVP는 한 일/할 일 요약, 수동 아티클 추천, 앱 실행 중 에이전트 종료 알림에 집중합니다 (§8).
 - 위젯과 마스코트 애니메이션은 MVP에서 제외하고 2단계(§2, §9)로 미룹니다.
-- 아티클은 AI 요약 없이 공식 피드의 제목, 링크, 출처와 게시일만 사용합니다 (§4.1).
+- 아티클은 AI 요약 없이 큐레이션 피드의 제목, 링크, 출처와 게시일만
+  사용하고 소스 품질 가중치를 반영합니다 (§4.1).
 - Git 활동은 브랜치 단위 자동 그룹핑 + 사용자 편집 기준으로 3단계에 반영합니다 (§4.2).
 - `responded`/`completed`는 색상+문구로 명확히 구분해 표시합니다 (§4.4).
 - 외부 연동은 Apple 미리 알림을 Google Calendar보다 먼저 진행합니다 (§4.3).

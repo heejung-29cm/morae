@@ -131,7 +131,12 @@ final class MoraeAppTests: XCTestCase {
         }
         XCTAssertEqual(
             migrations,
-            ["v1_initial", "v2_unique_carry_over", "v3_app_metadata"]
+            [
+                "v1_initial",
+                "v2_unique_carry_over",
+                "v3_app_metadata",
+                "v4_feed_selection_weight",
+            ]
         )
     }
 

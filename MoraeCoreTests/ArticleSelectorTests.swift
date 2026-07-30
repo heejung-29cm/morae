@@ -88,11 +88,35 @@ final class ArticleSelectorTests: XCTestCase {
         XCTAssertEqual(selected?.articleURL, laterA.articleURL)
     }
 
+    func testCuratedWeightCanOutrankFresherUnweightedSource() throws {
+        let curated = candidate(
+            path: "curated",
+            ageInDays: 4,
+            selectionWeight: 45
+        )
+        let fresh = candidate(
+            path: "fresh",
+            ageInDays: 1,
+            selectionWeight: 0
+        )
+
+        let selected = try ArticleSelector().select(
+            from: [fresh, curated],
+            interests: [],
+            readURLs: [],
+            recentlyRecommendedURLs: [],
+            now: now
+        )
+
+        XCTAssertEqual(selected?.articleURL, curated.articleURL)
+    }
+
     private func candidate(
         path: String,
         title: String = "Article",
         ageInDays: Int,
-        isOfficial: Bool = false
+        isOfficial: Bool = false,
+        selectionWeight: Int = 0
     ) -> FeedCandidate {
         FeedCandidate(
             sourceID: UUID(),
@@ -103,7 +127,8 @@ final class ArticleSelectorTests: XCTestCase {
             publishedAt: now.addingTimeInterval(
                 -TimeInterval(ageInDays * 86_400)
             ),
-            isOfficialSource: isOfficial
+            isOfficialSource: isOfficial,
+            selectionWeight: selectionWeight
         )
     }
 }

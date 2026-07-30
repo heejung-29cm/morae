@@ -23,7 +23,8 @@ public struct FeedCandidateDeduplicator: Sendable {
                 articleURL: canonicalURL,
                 title: candidate.title,
                 publishedAt: candidate.publishedAt,
-                isOfficialSource: candidate.isOfficialSource
+                isOfficialSource: candidate.isOfficialSource,
+                selectionWeight: candidate.selectionWeight
             )
             if let existing = selectedByURL[canonicalURL] {
                 selectedByURL[canonicalURL] = preferred(existing, normalized)
@@ -41,6 +42,9 @@ public struct FeedCandidateDeduplicator: Sendable {
         _ lhs: FeedCandidate,
         _ rhs: FeedCandidate
     ) -> FeedCandidate {
+        if lhs.selectionWeight != rhs.selectionWeight {
+            return lhs.selectionWeight > rhs.selectionWeight ? lhs : rhs
+        }
         if lhs.isOfficialSource != rhs.isOfficialSource {
             return lhs.isOfficialSource ? lhs : rhs
         }

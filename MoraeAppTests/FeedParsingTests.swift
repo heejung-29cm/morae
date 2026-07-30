@@ -22,6 +22,7 @@ final class FeedParsingTests: XCTestCase {
         XCTAssertEqual(candidates[0].sourceName, source.name)
         XCTAssertEqual(candidates[0].sourceURL, source.feedURL)
         XCTAssertTrue(candidates[0].isOfficialSource)
+        XCTAssertEqual(candidates[0].selectionWeight, 45)
         XCTAssertEqual(
             candidates[0].publishedAt,
             Date(timeIntervalSince1970: 1_785_294_000)
@@ -142,6 +143,7 @@ final class FeedParsingTests: XCTestCase {
             name: name,
             feedURL: URL(string: "https://fixture.invalid/rss.xml")!,
             isOfficial: true,
+            selectionWeight: 45,
             createdAt: instant,
             updatedAt: instant
         )

@@ -177,7 +177,8 @@ struct FeedMetadataParser: Sendable {
             articleURL: articleURL,
             title: normalizedTitle,
             publishedAt: publishedAt,
-            isOfficialSource: source.isOfficial
+            isOfficialSource: source.isOfficial,
+            selectionWeight: source.selectionWeight
         )
     }
 }

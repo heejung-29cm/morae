@@ -413,11 +413,24 @@ CREATE TABLE app_metadata (
 );
 ```
 
-`default_feeds_seeded=1` marker를 저장해 기본 피드가 최초 실행에만
-추가되도록 합니다. 사용자가 기본 피드를 삭제한 뒤 앱을 다시 실행해도
-자동 복구하지 않습니다.
+초기 공식 문서 피드 구성은 `default_feeds_seeded=1` marker를 사용했습니다.
+큐레이션 우선 구성은 `default_feeds_seeded_v2=1` marker를 사용합니다.
+v2를 처음 적용할 때 기존 네 기본 피드만 비활성화하고 새 큐레이션 피드를
+추가하며 사용자 정의 피드는 유지합니다. 사용자가 v2 기본 피드를 삭제한
+뒤 앱을 다시 실행해도 자동 복구하지 않습니다.
 
-### 6.4 저장 형식
+### 6.4 `v4_feed_selection_weight`
+
+```sql
+ALTER TABLE feed_sources
+ADD COLUMN selection_weight INTEGER NOT NULL DEFAULT 0
+    CHECK(selection_weight BETWEEN 0 AND 100);
+```
+
+큐레이션 서비스의 발행 빈도와 선별 밀도를 선정 점수에 반영합니다.
+0은 추가 선호가 없음을 뜻하며 기본 피드는 20...55 범위만 사용합니다.
+
+### 6.5 저장 형식
 
 - Bool은 SQLite INTEGER `0/1`로 저장합니다.
 - enum은 정의된 raw string/int로 저장합니다.
@@ -425,7 +438,7 @@ CREATE TABLE app_metadata (
 - nullable 개인정보 필드는 opt-in이 꺼지면 새 값부터 nil로 저장합니다.
 - opt-in을 끌 때 기존 `project_path`, `title`, `last_message`도 한 트랜잭션에서 NULL로 지웁니다.
 
-### 6.5 데이터 정리
+### 6.6 데이터 정리
 
 ```sql
 DELETE FROM agent_runs
@@ -628,16 +641,21 @@ feed 요청의 ETag와 Last-Modified 처리는 URLSession/URLCache에 맡깁니�
 
 ### 10.2 기본 피드와 Feed mapping
 
-2026-07-29에 다음 공식 피드의 HTTPS 응답, XML 파싱과 첫 글의 `title`, `link`, `pubDate`를 확인했습니다.
+2026-07-30에 다음 큐레이션 서비스의 공식 HTTPS 피드와 XML 응답을
+확인했습니다.
 
-| 출처 | 피드 URL |
-| --- | --- |
-| MDN Blog | `https://developer.mozilla.org/en-US/blog/rss.xml` |
-| web.dev | `https://web.dev/static/blog/feed.xml` |
-| Chrome for Developers | `https://developer.chrome.com/static/blog/feed.xml` |
-| React Blog | `https://react.dev/rss.xml` |
+| 출처 | 피드 URL | selectionWeight |
+| --- | --- | ---: |
+| GeekNews | `https://news.hada.io/rss/news` | 20 |
+| FE News | `https://fenews.substack.com/feed` | 55 |
+| Frontend Focus | `https://frontendfoc.us/rss/` | 45 |
+| JavaScript Weekly | `https://javascriptweekly.com/rss/` | 45 |
 
-각 사이트의 공식 페이지와 이용 정책도 확인했습니다. MVP는 제목, 링크, 출처와 게시일만 표시하고 피드 본문·요약, 이미지, 로고와 아티클 원문은 사용하지 않습니다. 기본 피드 fixture는 실제 콘텐츠를 복사하지 않고 자체 제작합니다.
+위 표의 세 번째 값은 `selectionWeight`입니다. GeekNews는 개별 토픽을,
+나머지 서비스는 큐레이션 호를 추천 단위로 사용합니다. MVP는 제목, 링크,
+출처와 게시일만 표시하고 피드 본문·요약, 이미지, 로고와 아티클 원문은
+사용하지 않습니다. 기본 피드 fixture는 실제 콘텐츠를 복사하지 않고
+자체 제작합니다.
 
 모든 feed 형식은 다음 중간 모델로 변환합니다.
 
@@ -650,6 +668,7 @@ struct FeedCandidate: Hashable, Sendable {
     let title: String
     let publishedAt: Date?
     let isOfficialSource: Bool
+    let selectionWeight: Int
 }
 ```
 
@@ -676,6 +695,7 @@ score =
     freshness(0...50)
   + interestMatch(0...25)
   + officialSource(0 or 15)
+  + selectionWeight(0...100)
   + unreadBonus(0 or 10)
   - recentlyRecommendedPenalty(0 or 60)
 ```
@@ -691,6 +711,7 @@ freshness:
 | 15일 이상/날짜 없음 | 0 |
 
 - interest는 title의 case-insensitive token match 비율로 계산합니다.
+- selectionWeight는 source 설정에서 후보로 전달하며 기본값은 0입니다.
 - 최근 90일 추천 URL에는 60점 감점합니다.
 - 모든 후보가 최근 추천 글이면 감점을 제거하고 가장 높은 후보를 사용합니다.
 - 동점은 `publishedAt DESC`, `canonicalURL ASC`로 결정해 결과를 재현 가능하게 합니다.
