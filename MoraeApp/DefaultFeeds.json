@@ -1,0 +1,26 @@
+[
+  {
+    "id": "8b064c57-30c5-4b87-863f-edb32940237a",
+    "name": "MDN Blog",
+    "feedURL": "https://developer.mozilla.org/en-US/blog/rss.xml",
+    "isOfficial": true
+  },
+  {
+    "id": "97014c67-3ffe-4701-a792-c07dccbc0c3c",
+    "name": "web.dev",
+    "feedURL": "https://web.dev/static/blog/feed.xml",
+    "isOfficial": true
+  },
+  {
+    "id": "8fa75519-5664-45ca-a687-5be871bb5f28",
+    "name": "Chrome for Developers",
+    "feedURL": "https://developer.chrome.com/static/blog/feed.xml",
+    "isOfficial": true
+  },
+  {
+    "id": "b487dcfb-a5cd-4400-bf33-6da825f4db06",
+    "name": "React Blog",
+    "feedURL": "https://react.dev/rss.xml",
+    "isOfficial": true
+  }
+]

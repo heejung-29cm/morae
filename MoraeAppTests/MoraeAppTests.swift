@@ -112,6 +112,7 @@ final class MoraeAppTests: XCTestCase {
             "briefing_runs",
             "agent_runs",
             "agent_events",
+            "app_metadata",
             "idx_tasks_day_status_order",
             "idx_tasks_carry_target_source",
             "idx_articles_published",
@@ -128,7 +129,10 @@ final class MoraeAppTests: XCTestCase {
                 sql: "SELECT identifier FROM grdb_migrations"
             )
         }
-        XCTAssertEqual(migrations, ["v1_initial", "v2_unique_carry_over"])
+        XCTAssertEqual(
+            migrations,
+            ["v1_initial", "v2_unique_carry_over", "v3_app_metadata"]
+        )
     }
 
     func testDatabaseEnablesForeignKeysAndBusyTimeout() throws {

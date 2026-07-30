@@ -64,6 +64,14 @@ final class AppDatabase: @unchecked Sendable {
                 WHERE source LIKE 'carryover:%'
                 """)
         }
+        migrator.registerMigration("v3_app_metadata") { database in
+            try database.execute(sql: """
+                CREATE TABLE app_metadata (
+                    key     TEXT PRIMARY KEY NOT NULL,
+                    value   TEXT NOT NULL
+                )
+                """)
+        }
         return migrator
     }
 }

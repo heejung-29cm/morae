@@ -22,6 +22,7 @@ final class AppContainer {
     let menuBarContentLoader: any MenuBarContentLoading
     let database: AppDatabase?
     let todoRepository: (any TodoRepository)?
+    let feedSourceRepository: (any FeedSourceRepository)?
     let startupError: AppError?
 
     init(
@@ -30,6 +31,7 @@ final class AppContainer {
         menuBarContentLoader: any MenuBarContentLoading,
         database: AppDatabase? = nil,
         todoRepository: (any TodoRepository)? = nil,
+        feedSourceRepository: (any FeedSourceRepository)? = nil,
         startupError: AppError? = nil
     ) {
         self.clock = clock
@@ -37,6 +39,7 @@ final class AppContainer {
         self.menuBarContentLoader = menuBarContentLoader
         self.database = database
         self.todoRepository = todoRepository
+        self.feedSourceRepository = feedSourceRepository
         self.startupError = startupError
     }
 
@@ -44,11 +47,16 @@ final class AppContainer {
         do {
             let paths = try AppDataDirectory().prepare()
             let database = try AppDatabase.open(at: paths.databaseURL)
+            let feedSourceRepository = GRDBFeedSourceRepository(database: database)
+            let now = SystemClock().now()
+            let defaultFeeds = try DefaultFeedLoader.load(at: now)
+            try feedSourceRepository.seedDefaultsSynchronously(defaultFeeds)
             return AppContainer(
                 clock: SystemClock(),
                 menuBarContentLoader: EmptyMenuBarContentLoader(),
                 database: database,
-                todoRepository: GRDBTodoRepository(database: database)
+                todoRepository: GRDBTodoRepository(database: database),
+                feedSourceRepository: feedSourceRepository
             )
         } catch {
             let startupError = AppError(
