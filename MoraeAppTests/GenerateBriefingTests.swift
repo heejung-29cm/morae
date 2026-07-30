@@ -71,6 +71,108 @@ final class GenerateBriefingTests: XCTestCase {
         XCTAssertEqual(counts.1, 1)
     }
 
+    func testPartialFeedFailureUsesSuccessfulCandidateWithoutRetry() async throws {
+        let database = try AppDatabase.inMemory()
+        let todoRepository = GRDBTodoRepository(database: database)
+        let feedSourceRepository = GRDBFeedSourceRepository(database: database)
+        let articleRepository = GRDBArticleRepository(
+            database: database,
+            clock: FixedClock(instant: Self.now)
+        )
+        let briefingRepository = GRDBBriefingRepository(
+            database: database,
+            uuidGenerator: SequenceUUIDGenerator(values: [Self.runUUID])
+        )
+        let sources = Array(Self.sources.prefix(4))
+        try await feedSourceRepository.seedDefaults(sources)
+        try await insertSummaryTodos(into: todoRepository)
+        let successfulSourceID = sources[0].id
+        let feedClient = ScriptedFeedClient(
+            successfulSourceIDs: [successfulSourceID]
+        )
+        let generator = GenerateBriefing(
+            todoRepository: todoRepository,
+            feedSourceRepository: feedSourceRepository,
+            feedClient: feedClient,
+            articleRepository: articleRepository,
+            briefingRepository: briefingRepository,
+            preferences: StaticBriefingPreferences(values: []),
+            clock: FixedClock(instant: Self.now),
+            uuidGenerator: SequenceUUIDGenerator(
+                values: [Self.articleUUID]
+            ),
+            calendar: Self.calendar
+        )
+
+        let result = await generator.execute(day: Self.today)
+
+        guard case let .generated(generated) = result else {
+            return XCTFail("Expected generated result, got \(result)")
+        }
+        XCTAssertEqual(generated.failedFeedCount, 3)
+        XCTAssertEqual(
+            generated.stored.article?.sourceName,
+            sources[0].name
+        )
+        for source in sources {
+            let count = await feedClient.requestCount(for: source.id)
+            XCTAssertEqual(count, 1, "\(source.name) should not retry")
+        }
+    }
+
+    func testAllFeedFailuresPreserveLocalSummaryAndDoNotRetry() async throws {
+        let database = try AppDatabase.inMemory()
+        let todoRepository = GRDBTodoRepository(database: database)
+        let feedSourceRepository = GRDBFeedSourceRepository(database: database)
+        let articleRepository = GRDBArticleRepository(
+            database: database,
+            clock: FixedClock(instant: Self.now)
+        )
+        let briefingRepository = GRDBBriefingRepository(
+            database: database,
+            uuidGenerator: SequenceUUIDGenerator(values: [Self.runUUID])
+        )
+        let sources = Array(Self.sources.prefix(4))
+        try await feedSourceRepository.seedDefaults(sources)
+        try await insertSummaryTodos(into: todoRepository)
+        let feedClient = ScriptedFeedClient(successfulSourceIDs: [])
+        let generator = GenerateBriefing(
+            todoRepository: todoRepository,
+            feedSourceRepository: feedSourceRepository,
+            feedClient: feedClient,
+            articleRepository: articleRepository,
+            briefingRepository: briefingRepository,
+            preferences: StaticBriefingPreferences(values: []),
+            clock: FixedClock(instant: Self.now),
+            uuidGenerator: SequenceUUIDGenerator(values: []),
+            calendar: Self.calendar
+        )
+
+        let result = await generator.execute(day: Self.today)
+
+        guard case let .failed(failure) = result else {
+            return XCTFail("Expected failed result, got \(result)")
+        }
+        XCTAssertEqual(failure.code, .feedUnavailable)
+        XCTAssertEqual(failure.failedFeedCount, 4)
+        XCTAssertEqual(failure.localTasks?.yesterdayCompleted.count, 1)
+        XCTAssertEqual(failure.localTasks?.todayPending.count, 1)
+        XCTAssertEqual(failure.run?.status, .failed)
+        XCTAssertEqual(failure.run?.errorCode, .feedUnavailable)
+        for source in sources {
+            let count = await feedClient.requestCount(for: source.id)
+            XCTAssertEqual(count, 1, "\(source.name) should not retry")
+        }
+
+        let articleCount = try database.read { database in
+            try Int.fetchOne(
+                database,
+                sql: "SELECT COUNT(*) FROM articles"
+            )
+        }
+        XCTAssertEqual(articleCount, 0)
+    }
+
     private func insertSummaryTodos(
         into repository: GRDBTodoRepository
     ) async throws {
@@ -159,6 +261,47 @@ private actor CountingFeedClient: FeedClient {
     func requestCount() -> Int {
         count
     }
+}
+
+private actor ScriptedFeedClient: FeedClient {
+    private let successfulSourceIDs: Set<UUID>
+    private var counts: [UUID: Int] = [:]
+
+    init(successfulSourceIDs: Set<UUID>) {
+        self.successfulSourceIDs = successfulSourceIDs
+    }
+
+    func candidates(
+        from source: FeedSource
+    ) async throws -> [FeedCandidate] {
+        counts[source.id, default: 0] += 1
+        guard successfulSourceIDs.contains(source.id) else {
+            throw ScriptedFeedError.unavailable
+        }
+        return [
+            FeedCandidate(
+                sourceID: source.id,
+                sourceName: source.name,
+                sourceURL: source.feedURL,
+                articleURL: URL(
+                    string: "https://articles.invalid/\(source.id)"
+                )!,
+                title: "Available article",
+                publishedAt: Date(
+                    unixMilliseconds: 1_775_039_000_000
+                ),
+                isOfficialSource: source.isOfficial
+            ),
+        ]
+    }
+
+    func requestCount(for sourceID: UUID) -> Int {
+        counts[sourceID, default: 0]
+    }
+}
+
+private enum ScriptedFeedError: Error {
+    case unavailable
 }
 
 private struct StaticBriefingPreferences: BriefingPreferences {
