@@ -296,6 +296,7 @@ final class GenerateBriefingTests: XCTestCase {
 
         do {
             let database = try AppDatabase.open(at: databaseURL)
+            defer { try? database.close() }
             let todoRepository = GRDBTodoRepository(database: database)
             let feedRepository = GRDBFeedSourceRepository(database: database)
             let articleRepository = GRDBArticleRepository(
@@ -327,6 +328,7 @@ final class GenerateBriefingTests: XCTestCase {
 
         do {
             let database = try AppDatabase.open(at: databaseURL)
+            defer { try? database.close() }
             let todoRepository = GRDBTodoRepository(database: database)
             let feedRepository = GRDBFeedSourceRepository(database: database)
             let articleRepository = GRDBArticleRepository(
@@ -375,6 +377,7 @@ final class GenerateBriefingTests: XCTestCase {
 
         do {
             let database = try AppDatabase.open(at: databaseURL)
+            defer { try? database.close() }
             let todoRepository = GRDBTodoRepository(database: database)
             let briefingRepository = GRDBBriefingRepository(
                 database: database,

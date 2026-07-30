@@ -459,6 +459,7 @@ final class TodoRepositoryTests: XCTestCase {
 
         do {
             let database = try AppDatabase.open(at: databaseURL)
+            defer { try? database.close() }
             let repository = GRDBTodoRepository(database: database)
             for item in [first, completed, deleted] {
                 try await repository.insert(item)
@@ -488,6 +489,7 @@ final class TodoRepositoryTests: XCTestCase {
         }
 
         let reopenedDatabase = try AppDatabase.open(at: databaseURL)
+        defer { try? reopenedDatabase.close() }
         let reopenedRepository = GRDBTodoRepository(database: reopenedDatabase)
         let persisted = try await reopenedRepository.list(day: dayOne)
         XCTAssertEqual(persisted.map(\.id), [first.id, completed.id])

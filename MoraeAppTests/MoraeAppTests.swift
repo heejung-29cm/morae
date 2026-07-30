@@ -165,6 +165,7 @@ final class MoraeAppTests: XCTestCase {
 
         let databaseURL = root.appendingPathComponent("morae.sqlite")
         let database = try AppDatabase.open(at: databaseURL)
+        defer { try? database.close() }
         let journalMode = try database.read { db in
             try String.fetchOne(db, sql: "PRAGMA journal_mode")
         }

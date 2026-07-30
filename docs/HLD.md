@@ -44,8 +44,8 @@ MVP가 제공하는 사용자 가치는 다음 세 가지입니다.
 
 ### 2.3 현재 전달 상태
 
-Sprint 0, Sprint 1, Sprint 1.5, Sprint 2와 Sprint 3가 구현됐습니다. 현재 실행
-가능한 범위는 메뉴 막대 앱 셸, GRDB/SQLite 영구 저장, 할 일
+Sprint 0부터 Sprint 3.3까지 구현됐습니다. 현재 실행 가능한 범위는
+메뉴 막대 앱 셸, GRDB/SQLite 영구 저장, 할 일
 CRUD·완료·재정렬·이월, 어제 완료 요약과 소프트 블루 기반 light/dark
 UI입니다. 아티클 영역은 기본 피드 seed, 제한된 HTTPS client, RSS/Atom
 메타데이터 파싱, URL 정규화·중복 제거·선정과 로컬 저장소까지

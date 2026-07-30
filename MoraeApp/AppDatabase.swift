@@ -43,6 +43,10 @@ final class AppDatabase: @unchecked Sendable {
         try writer.read(value)
     }
 
+    func close() throws {
+        try writer.close()
+    }
+
     private static func makeConfiguration() -> Configuration {
         var configuration = Configuration()
         configuration.prepareDatabase { database in

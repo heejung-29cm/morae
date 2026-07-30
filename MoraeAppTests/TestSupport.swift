@@ -37,6 +37,7 @@ final class TemporaryDatabase {
     }
 
     deinit {
+        try? database.close()
         try? FileManager.default.removeItem(at: rootURL)
     }
 }

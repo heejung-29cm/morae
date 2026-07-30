@@ -200,34 +200,6 @@ final class ArticleSelectorTests: XCTestCase {
         XCTAssertEqual(selected?.articleURL, preferred.articleURL)
     }
 
-    func testCollaborationTopicOutranksInfrastructureAndOtherTopics() throws {
-        let collaboration = candidate(
-            path: "collaboration",
-            title: "코드 리뷰로 더 나은 팀 협업 만들기",
-            ageInDays: 4
-        )
-        let infrastructure = candidate(
-            path: "infrastructure",
-            title: "Cloud observability patterns",
-            ageInDays: 4
-        )
-        let other = candidate(
-            path: "other",
-            title: "A thoughtful engineering essay",
-            ageInDays: 4
-        )
-
-        let selected = try ArticleSelector().select(
-            from: [other, infrastructure, collaboration],
-            interests: [],
-            readURLs: [],
-            recentlyRecommendedURLs: [],
-            now: now
-        )
-
-        XCTAssertEqual(selected?.articleURL, collaboration.articleURL)
-    }
-
     private func candidate(
         path: String,
         title: String = "Article",

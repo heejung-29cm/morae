@@ -29,6 +29,8 @@ GeekNews와 Korean FE Article은 개별 글을 제공하지만 기술 범위가 
 - 최근 90일 추천 감점은 유지해 같은 상위 주제 글만 반복되는 것을
   완화합니다.
 - 키워드 집합은 코드에 고정하며 MVP 설정 UI에는 노출하지 않습니다.
+- 주제 판별은 `ArticleTopicClassifier`, 전체 후보 점수 계산과 선택은
+  `ArticleSelector`가 담당합니다.
 
 ## Consequences
 

@@ -19,9 +19,9 @@
 - 사용자 에이전트 작업은 모래의 이벤트 전달 실패 때문에 실패하지 않아야 합니다.
 - 시간의 순간은 UTC Unix millisecond, 사용자의 날짜는 `LocalDay`로 명시적으로 구분합니다.
 
-현재 as-built 범위는 Sprint 0, Sprint 1, Sprint 1.5, Sprint 2와 Sprint
-3입니다. 따라서 이 문서의 Todo·DB·메뉴 막대 UI, Feed·Article과 수동
-Briefing 절은 구현과 동기화돼 있습니다. Agent IPC·알림,
+현재 as-built 범위는 Sprint 0부터 Sprint 3.3까지입니다. 따라서 이
+문서의 Todo·DB·메뉴 막대 UI, Feed·Article과 수동 Briefing 절은 구현과
+동기화돼 있습니다. Agent IPC·알림,
 Settings·배포 절은 후속 Sprint의 확정 설계입니다.
 
 ## 2. 빌드 단위
@@ -731,6 +731,8 @@ freshness:
 - 둘 이상의 분류에 해당하면 가장 높은 점수 하나만 사용합니다.
 - 영문 키워드에 한글 조사가 붙은 경우(`AI로`, `React를`)도 영문
   토큰으로 분리합니다.
+- `ArticleTopicClassifier`가 제목을 네 주제로 분류하고,
+  `ArticleSelector`는 반환된 점수를 나머지 선정 신호와 합산합니다.
 - 이 분류는 제목 메타데이터만 사용합니다. 본문 의미 분석이나 외부 AI
   API 호출은 하지 않습니다.
 - interest는 title의 case-insensitive token match 비율로 계산합니다.
@@ -1186,6 +1188,7 @@ categories:
 
 - LocalDay 생성과 time zone 변경
 - URL canonicalization과 입력 순서에 독립적인 feed candidate deduplication
+- 제목 기반 아티클 주제 분류와 우선순위
 - 고정 Clock 기반 아티클 선정 점수와 동점 규칙
 - Todo validation
 - Agent status rank
@@ -1264,7 +1267,7 @@ fixture:
 | 요구사항 | 구현 |
 | --- | --- |
 | 한 일/할 일 요약 | TodoRepository, BuildLocalTaskSummary, MenuBarRootView |
-| 수동 아티클 추천 | GenerateBriefing, FeedClient, ArticleSelector |
+| 수동 아티클 추천 | GenerateBriefing, FeedClient, ArticleTopicClassifier, ArticleSelector |
 | Codex 종료 알림 | HamsterEventCLI, CodexNormalizer, AgentNotifier |
 | Claude 종료·완료·실패 | ClaudeNormalizer, turn correlation, AgentRepository |
 | 앱 실행 중만 수신 | UDS server, no spool/retry |
