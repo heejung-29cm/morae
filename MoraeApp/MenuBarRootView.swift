@@ -1,6 +1,5 @@
 import MoraeCore
 import SwiftUI
-import UniformTypeIdentifiers
 
 enum MenuBarSection: String, CaseIterable, Sendable {
     case article
@@ -55,58 +54,14 @@ private enum TodoDropInsertion: Equatable {
     }
 }
 
-private struct TodoRowDropDelegate: DropDelegate {
-    let sourceID: TodoID?
-    let targetID: TodoID
-    let orderedIDs: [TodoID]
-    let onTargetChanged: (TodoDropInsertion?) -> Void
-    let onDrop: (TodoID, TodoDropInsertion) -> Bool
+private struct TodoRowFramePreferenceKey: PreferenceKey {
+    static let defaultValue: [TodoID: CGRect] = [:]
 
-    func validateDrop(info: DropInfo) -> Bool {
-        sourceID != nil
-            && sourceID != targetID
-            && info.hasItemsConforming(to: [UTType.plainText])
-    }
-
-    func dropEntered(info: DropInfo) {
-        onTargetChanged(insertion)
-    }
-
-    func dropUpdated(info: DropInfo) -> DropProposal? {
-        guard insertion != nil else {
-            return DropProposal(operation: .forbidden)
-        }
-        return DropProposal(operation: .move)
-    }
-
-    func dropExited(info: DropInfo) {
-        onTargetChanged(nil)
-    }
-
-    func performDrop(info: DropInfo) -> Bool {
-        guard let sourceID, let insertion else {
-            onTargetChanged(nil)
-            return false
-        }
-        return onDrop(sourceID, insertion)
-    }
-
-    private var insertion: TodoDropInsertion? {
-        guard let sourceID,
-              let sourceIndex = orderedIDs.firstIndex(of: sourceID),
-              let targetIndex = orderedIDs.firstIndex(of: targetID),
-              sourceIndex != targetIndex else {
-            return nil
-        }
-
-        if sourceIndex < targetIndex {
-            let nextIndex = targetIndex + 1
-            if orderedIDs.indices.contains(nextIndex) {
-                return .before(orderedIDs[nextIndex])
-            }
-            return .end
-        }
-        return .before(targetID)
+    static func reduce(
+        value: inout [TodoID: CGRect],
+        nextValue: () -> [TodoID: CGRect]
+    ) {
+        value.merge(nextValue(), uniquingKeysWith: { _, next in next })
     }
 }
 
@@ -118,6 +73,7 @@ struct MenuBarRootView: View {
     @State private var editingDraft: TodoEditDraft?
     @State private var draggedTodoID: TodoID?
     @State private var dropInsertion: TodoDropInsertion?
+    @State private var todoRowFrames: [TodoID: CGRect] = [:]
     @FocusState private var isQuickAddFocused: Bool
 
     init(container: AppContainer) {
@@ -389,20 +345,19 @@ struct MenuBarRootView: View {
                         dropInsertionLine
                     }
                 }
-                .onDrop(
-                    of: [UTType.plainText],
-                    delegate: TodoRowDropDelegate(
-                        sourceID: draggedTodoID,
-                        targetID: item.id,
-                        orderedIDs: pendingItems.map(\.id),
-                        onTargetChanged: { insertion in
-                            dropInsertion = insertion
-                        },
-                        onDrop: { sourceID, insertion in
-                            acceptTodoDrop(sourceID, at: insertion)
-                        }
-                    )
-                )
+                .background {
+                    GeometryReader { proxy in
+                        Color.clear.preference(
+                            key: TodoRowFramePreferenceKey.self,
+                            value: [
+                                item.id: proxy.frame(
+                                    in: .named(TodoDragCoordinateSpace.name)
+                                ),
+                            ]
+                        )
+                    }
+                }
+                .zIndex(draggedTodoID == item.id ? 1 : 0)
             }
             ForEach(completedItems) { item in
                 if item.id != completedItems.first?.id || !pendingItems.isEmpty {
@@ -410,6 +365,10 @@ struct MenuBarRootView: View {
                 }
                 todoRowContent(item)
             }
+        }
+        .coordinateSpace(name: TodoDragCoordinateSpace.name)
+        .onPreferenceChange(TodoRowFramePreferenceKey.self) {
+            todoRowFrames = $0
         }
     }
 
@@ -469,6 +428,12 @@ struct MenuBarRootView: View {
                 draggedTodoID = pendingTodo(storageID: storageID)?.id
                 dropInsertion = nil
             },
+            onDragChanged: { location in
+                updateTodoDrag(item.id, location: location)
+            },
+            onDragEnded: { location in
+                finishTodoDrag(item.id, location: location)
+            },
             onToggleCompletion: {
                 Task {
                     await viewModel.toggleTodo(id: item.id)
@@ -505,6 +470,33 @@ struct MenuBarRootView: View {
         viewModel.todayTodos.first {
             $0.status == .pending && $0.id.storageValue == storageID
         }
+    }
+
+    private func updateTodoDrag(_ sourceID: TodoID, location: CGPoint) {
+        guard draggedTodoID == sourceID else { return }
+        let orderedFrames = pendingTodoIDs.compactMap { id in
+            todoRowFrames[id].map { (id, $0) }
+        }
+        let candidate = orderedFrames.first { _, frame in
+            location.y < frame.midY
+        }
+        let insertion = candidate.map {
+            TodoDropInsertion.before($0.0)
+        } ?? .end
+        dropInsertion = TodoReorderPlan.moving(
+            sourceID,
+            before: insertion.targetID,
+            in: pendingTodoIDs
+        ) == nil ? nil : insertion
+    }
+
+    private func finishTodoDrag(_ sourceID: TodoID, location: CGPoint) {
+        updateTodoDrag(sourceID, location: location)
+        guard let dropInsertion else {
+            draggedTodoID = nil
+            return
+        }
+        _ = acceptTodoDrop(sourceID, at: dropInsertion)
     }
 
     private func submitQuickAdd() {

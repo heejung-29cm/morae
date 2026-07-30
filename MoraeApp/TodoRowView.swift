@@ -7,6 +7,8 @@ struct TodoRowView: View {
     let canMoveDown: Bool
     let dragIdentifier: String?
     let onDragStarted: (String) -> Void
+    let onDragChanged: (CGPoint) -> Void
+    let onDragEnded: (CGPoint) -> Void
     let onToggleCompletion: () -> Void
     let onMoveUp: () -> Void
     let onMoveDown: () -> Void
@@ -36,7 +38,9 @@ struct TodoRowView: View {
             TodoDragSourceModifier(
                 item: item,
                 identifier: dragIdentifier,
-                onDragStarted: onDragStarted
+                onDragStarted: onDragStarted,
+                onDragChanged: onDragChanged,
+                onDragEnded: onDragEnded
             )
         )
         .accessibilityElement(children: .contain)
@@ -158,23 +162,54 @@ private struct TodoDragSourceModifier: ViewModifier {
     let item: TodoItem
     let identifier: String?
     let onDragStarted: (String) -> Void
+    let onDragChanged: (CGPoint) -> Void
+    let onDragEnded: (CGPoint) -> Void
+
+    @State private var isDragging = false
+    @State private var dragOffset = CGSize.zero
 
     @ViewBuilder
     func body(content: Content) -> some View {
         if let identifier {
-            content.onDrag {
-                onDragStarted(identifier)
-                return NSItemProvider(object: identifier as NSString)
-            } preview: {
-                TodoDragPreview(item: item)
-            }
+            content
+                .opacity(isDragging ? 0.32 : 1)
+                .overlay {
+                    if isDragging {
+                        TodoDragPreview(item: item)
+                            .offset(dragOffset)
+                            .allowsHitTesting(false)
+                    }
+                }
+                .simultaneousGesture(
+                    DragGesture(
+                        minimumDistance: 3,
+                        coordinateSpace: .named(TodoDragCoordinateSpace.name)
+                    )
+                    .onChanged { value in
+                        if !isDragging {
+                            isDragging = true
+                            onDragStarted(identifier)
+                        }
+                        dragOffset = value.translation
+                        onDragChanged(value.location)
+                    }
+                    .onEnded { value in
+                        onDragEnded(value.location)
+                        isDragging = false
+                        dragOffset = .zero
+                    }
+                )
         } else {
             content
         }
     }
 }
 
-private struct TodoDragPreview: View {
+enum TodoDragCoordinateSpace {
+    static let name = "morae.today-todo-list"
+}
+
+struct TodoDragPreview: View {
     let item: TodoItem
 
     var body: some View {
