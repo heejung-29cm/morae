@@ -1,6 +1,6 @@
 # 모래 MVP Sprint Tasks
 
-> 상태: Sprint 0~4 완료 / Sprint 5~6 준비 완료
+> 상태: Sprint 0~5 완료 / Sprint 6 준비 완료
 > 최종 수정: 2026-07-30
 > 기준 문서: [README](../README.md), [HLD](HLD.md), [LLD](LLD.md), [ADR](adr/)
 
@@ -38,7 +38,8 @@
 | Sprint 3.2 | 완료 | 개별 글 소스, 최근 30일 제한, 아티클 전용 UI |
 | Sprint 3.3 | 완료 | AI·FE 중심 제목 기반 주제 우선순위 |
 | Sprint 4 | 완료 | 안전한 Agent UDS 전송, best-effort CLI, ACK와 통합 테스트 |
-| Sprint 5~6 | 예정 | Agent 정규화·저장·알림, 설정·배포 |
+| Sprint 5 | 완료 | Agent 정규화·턴 연결·저장·알림·unread UI·90일 보존 |
+| Sprint 6 | 예정 | 설정·Hook 설치·개인정보 관리·배포 |
 
 완료 표시는 현재 브랜치의 구현과 자동화 테스트를 기준으로 합니다. 후속
 Sprint용 DB 테이블과 empty state가 존재하더라도 실제 기능 연결 전에는
@@ -263,6 +264,18 @@ Sprint 종료 데모:
 - 서로 다른 Codex turn 두 개가 별도 기록됩니다.
 - Claude Notification→TaskCompleted→Stop이 한 turn에 연결되고 상태가 강등되지 않습니다.
 - 앱 창이 닫혀 있어도 앱 프로세스가 실행 중이면 알림이 표시됩니다.
+
+구현 결과:
+
+- S5-01~S5-12를 구현하고 live UDS handler에 연결했습니다.
+- Codex/Claude fixture를 production client/server로 전송해 ACK, 턴별
+  저장, eventKey 중복 억제와 알림 횟수를 함께 검증합니다.
+- 최근 20개 기록과 unread 메뉴 아이콘은 GRDB observation으로 갱신되며,
+  메뉴를 열면 읽음 처리됩니다.
+- 알림 권한을 거부해도 unread 아이콘은 유지되고 권한 요청을 반복하지
+  않습니다. 개인정보 필드는 기본적으로 저장하지 않습니다.
+- 직접 확인은 [Sprint 5 데모 체크리스트](SPRINT_5_DEMO_CHECKLIST.md)를
+  따릅니다.
 
 ## 8. Sprint 6 — 설정·개인정보·출시 검증
 

@@ -2,7 +2,7 @@
 
 macOS 바탕화면에서 매일의 지식, 업무 계획, AI 에이전트 작업 상태를 한곳에 보여주는 개인 비서입니다. 마스코트는 움직이는 햄스터 캐릭터 "모래"입니다.
 
-> 문서 상태: MVP 사양 확정 / Sprint 0~4 구현 완료
+> 문서 상태: MVP 사양 확정 / Sprint 0~5 구현 완료
 > 최초 작성: 2026-07-24  
 > 최종 수정: 2026-07-30
 > 코드네임: Hamster Bot (제품명 "모래"로 확정, bundle ID 등 식별자는 로마자 슬러그 `morae` 사용)
@@ -16,11 +16,12 @@ macOS 바탕화면에서 매일의 지식, 업무 계획, AI 에이전트 작업
 - [Sprint 2 Demo Checklist](docs/SPRINT_2_DEMO_CHECKLIST.md)
 - [Sprint 3 Demo Checklist](docs/SPRINT_3_DEMO_CHECKLIST.md)
 - [Sprint 4 Demo Checklist](docs/SPRINT_4_DEMO_CHECKLIST.md)
+- [Sprint 5 Demo Checklist](docs/SPRINT_5_DEMO_CHECKLIST.md)
 - [Architecture Decision Records](docs/adr/)
 
 ## 현재 구현 상태
 
-2026-07-30 기준으로 Sprint 0부터 Sprint 4까지 구현됐습니다.
+2026-07-30 기준으로 Sprint 0부터 Sprint 5까지 구현됐습니다.
 
 - macOS 14 이상을 대상으로 하는 `MenuBarExtra(.window)` 앱과 로컬 SQLite
   저장소가 동작합니다.
@@ -47,13 +48,22 @@ macOS 바탕화면에서 매일의 지식, 업무 계획, AI 에이전트 작업
   `hamster-event`가 Codex argv 또는 Claude stdin 이벤트 한 건을 900ms
   best-effort 계약으로 전달합니다. UID·권한·symlink·frame/version/크기
   검증과 안전한 ACK가 구현됐으며 재시도나 디스크 spool은 없습니다.
-- 전체 scheme의 자동화 테스트는 106개입니다 (`MoraeApp` 70개,
-  `MoraeCore` 26개, `HamsterEventCLI` 10개).
+- Codex `agent-turn-complete`와 Claude의 다섯 Hook을 공통 상태로
+  정규화하고 여러 턴을 구분해 저장합니다. eventKey 중복과 상태 강등을
+  막고, 90일이 지난 기록은 앱 시작 및 하루 한 번 새 수신 뒤 삭제합니다.
+- 최근 에이전트 기록 20개를 source 또는 허용된 projectPath 기준으로
+  그룹핑하며 상태 아이콘·문구와 unread 표시를 제공합니다. 메뉴를 열면
+  읽음 처리되고 알림 권한이 없을 때도 filled 메뉴 막대 아이콘으로
+  새 기록을 알립니다.
+- 사용자가 메뉴에서 명시적으로 허용한 경우에만 source/status로 구성된
+  일반화된 macOS 알림을 보냅니다. 기본 개인정보 저장 설정은 모두
+  꺼져 있고 원본 Hook payload는 DB에 저장하지 않습니다.
+- 전체 scheme의 자동화 테스트는 121개입니다 (`MoraeApp` 79개,
+  `MoraeCore` 32개, `HamsterEventCLI` 10개).
 
-에이전트 영역은 아직 empty state입니다. Sprint 4는 안전한 전송 계층까지만
-완료했으며, source별 정규화·DB 저장·macOS 알림은 Sprint 5 범위입니다.
-따라서 현재 live socket은 검증된 이벤트에도 `unsupported_event` ACK를
-반환합니다. 실제 설정 화면과 DMG 출시는 Sprint 6 범위입니다. 상세 진행 상태는
+Codex/Claude 설정 파일을 앱에서 자동 편집하거나 helper를 앱 번들에
+패키징하는 설정·배포 흐름은 Sprint 6 범위입니다. Sprint 5 기능은 빌드된
+`hamster-event`로 직접 확인할 수 있습니다. 상세 진행 상태는
 [MVP Sprint Tasks](docs/SPRINT_TASKS.md)를 기준으로 합니다.
 
 ## 1. 제품 목표
@@ -73,9 +83,9 @@ macOS 바탕화면에서 매일의 지식, 업무 계획, AI 에이전트 작업
 | 인터페이스 | 역할 | 상태 |
 | --- | --- | --- |
 | 바탕화면 위젯 | 아티클, 완료한 일, 오늘 할 일 등 자주 보는 요약 정보 | MVP 이후 2단계 |
-| 메뉴 막대 앱 | 상세 내용, 할 일 편집, 수동 브리핑, 에이전트 상태, 설정 | Sprint 4까지 구현(에이전트 표시는 Sprint 5) |
+| 메뉴 막대 앱 | 상세 내용, 할 일 편집, 수동 브리핑, 에이전트 상태, 설정 | Sprint 5까지 구현(설정은 Sprint 6) |
 | 마스코트(모래) | 메뉴 막대 앱 또는 별도 오버레이 창에서 움직이는 햄스터 캐릭터로 상태를 표현 | MVP 이후 2단계 |
-| macOS 알림 | 에이전트 작업 완료, 승인 필요, 실패 등 즉시 확인할 이벤트 | Sprint 5 예정 |
+| macOS 알림 | 에이전트 작업 완료, 승인 필요, 실패 등 즉시 확인할 이벤트 | Sprint 5 구현 |
 
 마스코트는 WidgetKit 위젯이 아닌 메뉴 막대 앱 또는 별도 오버레이 창에 배치합니다. WidgetKit은 갱신 횟수가 제한돼 실시간 애니메이션이 불가능하기 때문입니다.
 

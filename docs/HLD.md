@@ -44,7 +44,7 @@ MVP가 제공하는 사용자 가치는 다음 세 가지입니다.
 
 ### 2.3 현재 전달 상태
 
-Sprint 0부터 Sprint 4까지 구현됐습니다. 현재 실행 가능한 범위는
+Sprint 0부터 Sprint 5까지 구현됐습니다. 현재 실행 가능한 범위는
 메뉴 막대 앱 셸, GRDB/SQLite 영구 저장, 할 일
 CRUD·완료·재정렬·이월, 어제 완료 요약과 소프트 블루 기반 light/dark
 UI입니다. 아티클 영역은 기본 피드 seed, 제한된 HTTPS client, RSS/Atom
@@ -57,10 +57,11 @@ GeekNews와 Korean FE Article이며, 게시일이 있는 최근 30일의 개별 
 선정합니다. 제목 기반 AI·프론트엔드 ≫ 협업 > 인프라·데이터 순의
 주제 우선순위와 소스별 큐레이션 가중치를 점수에 반영합니다.
 
-에이전트 IPC 전송 계층은 구현됐습니다. 앱 프로세스 시작 시 사용자 전용
-UDS listener를 열고 Codex/Claude helper 입력을 검증해 ACK하지만, 정규화·DB
-저장·알림 handler가 연결되는 Sprint 5 전까지 live handler는
-`unsupported_event`를 반환합니다. 설정과 배포는 Sprint 6 범위입니다.
+에이전트 IPC 전송 계층과 live handler가 구현됐습니다. 앱 프로세스 시작 시
+사용자 전용 UDS listener를 열고 Codex/Claude helper 입력을 검증한 뒤
+정규화·턴 연결·중복 억제·DB 저장이 성공해야 ACK합니다. 최근 20개 기록,
+unread 메뉴 아이콘, 사용자 동작 기반의 일반화된 macOS 알림과 90일 보존
+정리도 연결됐습니다. Hook 설정 UI와 배포는 Sprint 6 범위입니다.
 앱 실행이나 메뉴 열기만으로 피드 네트워크 요청은 시작하지 않습니다.
 
 ## 3. 아키텍처 드라이버

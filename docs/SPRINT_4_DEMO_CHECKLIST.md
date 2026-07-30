@@ -4,9 +4,9 @@
 > 최종 수정: 2026-07-30
 
 Sprint 4는 Codex/Claude 이벤트를 앱 프로세스까지 안전하게 전달하는
-transport만 완성합니다. 정규화·DB 저장·화면 표시·macOS 알림은 Sprint 5
-범위이므로, 현재 앱의 정상 응답은 `unsupported_event`이며 CLI는 계약대로
-이를 출력하지 않고 exit 0으로 종료합니다.
+transport를 완성한 시점의 체크리스트입니다. 현재 브랜치는 Sprint 5까지
+구현되어 정상 이벤트를 저장하므로, 최신 동작은
+[Sprint 5 데모 체크리스트](SPRINT_5_DEMO_CHECKLIST.md)를 따릅니다.
 
 ## 1. 자동 검증
 
@@ -34,8 +34,8 @@ xcodebuild test \
 - `MoraeApp` 70개
 - 합계 106개, 실패 0개
 
-`testRealClientServerRoundTripWithPartialWrites`는 임시 UDS에서 production
-client/server를 연결하고 3-byte partial write 뒤 성공 ACK를 확인합니다.
+`testRealClientServerRoundTrip`은 임시 UDS에서 production client/server의
+성공 ACK를 확인합니다. partial read는 별도 byte 단위 테스트가 검증합니다.
 
 ## 2. 앱 실행 중 수동 smoke test
 
@@ -59,8 +59,8 @@ CLI_PATH="$(find ~/Library/Developer/Xcode/DerivedData \
 echo $?
 ```
 
-기대 결과는 출력 없음, exit code `0`입니다. Sprint 4 live handler는 아직
-이벤트를 저장하지 않으므로 에이전트 empty state가 유지됩니다.
+기대 결과는 출력 없음, exit code `0`입니다. 현재 Sprint 5 live handler는
+이 이벤트를 최근 에이전트 기록에 `응답 완료`로 저장합니다.
 
 ## 3. 앱 종료 상태 확인
 
@@ -75,8 +75,8 @@ echo $?
 - payload spool 파일 없음
 - 기존 `event.sock` 제거
 
-## 4. Sprint 5 연결 지점
+## 4. Sprint 5 연결 상태
 
-S5-06에서 `AgentEnvelopeHandling`에 `ReceiveAgentEvent`를 주입합니다.
-그때부터 지원 이벤트는 정규화와 DB 저장 성공 후 success ACK를 받고,
-에이전트 목록과 알림까지 직접 확인할 수 있습니다.
+현재는 `AgentEnvelopeHandling`에 `ReceiveAgentEvent`가 주입되어 있습니다.
+지원 이벤트는 정규화와 DB 저장 성공 후 success ACK를 받고, 에이전트
+목록과 알림까지 직접 확인할 수 있습니다.

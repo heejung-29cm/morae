@@ -19,11 +19,12 @@
 - 사용자 에이전트 작업은 모래의 이벤트 전달 실패 때문에 실패하지 않아야 합니다.
 - 시간의 순간은 UTC Unix millisecond, 사용자의 날짜는 `LocalDay`로 명시적으로 구분합니다.
 
-현재 as-built 범위는 Sprint 0부터 Sprint 4까지입니다. 따라서 이
+현재 as-built 범위는 Sprint 0부터 Sprint 5까지입니다. 따라서 이
 문서의 Todo·DB·메뉴 막대 UI, Feed·Article과 수동 Briefing 절은 구현과
 동기화돼 있으며 Agent IPC 절의 envelope, CLI, UDS client/server와 ACK도
-구현됐습니다. Agent 정규화·저장·알림, Settings·배포 절은 후속 Sprint의
-확정 설계입니다.
+구현됐습니다. Agent 정규화·턴 연결·저장·90일 정리·최근 기록 UI·unread
+표시와 기본 macOS 알림도 live 경로에 연결됐습니다. Settings·Hook 설치와
+배포 절은 후속 Sprint의 확정 설계입니다.
 
 ## 2. 빌드 단위
 
@@ -538,6 +539,7 @@ protocol BriefingRepository: Sendable {
 protocol AgentRepository: Sendable {
     func apply(_ event: NormalizedAgentEvent) async throws -> AgentApplyResult
     func recent(limit: Int) async throws -> [AgentRun]
+    func observation(limit: Int) -> AsyncValueObservation<[AgentRun]>
     func markAllRead() async throws
     func prune(receivedBefore cutoff: Date) async throws -> Int
 }
@@ -811,10 +813,12 @@ as-built 경계:
   보유합니다. 앱 종료나 container 해제 시 socket을 닫고 안전하게 제거합니다.
 - 부모 `0700`, socket `0600`, owner·symlink·peer UID 검증을 적용합니다.
 - connection 하나에서 frame 하나만 읽고 동시 처리 수는 8개로 제한합니다.
-- Sprint 4의 기본 `AgentEnvelopeHandling` 구현은
-  `unsupported_event` ACK를 반환합니다.
-- 성공 ACK는 테스트용 handler round-trip에서 검증됐습니다. 실제
-  decode→normalize→DB save 이후 성공 ACK 연결은 S5-06에서 수행합니다.
+- `ReceiveAgentEnvelopeHandler`가 `ReceiveAgentEvent`를 호출하며
+  decode→normalize→DB save가 성공한 뒤에만 success ACK를 반환합니다.
+- 허용하지 않은 source event는 `unsupported_event`, decode 실패는
+  `invalid_payload`, 저장 실패는 `persistence_failed`로 응답합니다.
+- production client/server와 Codex·Claude fixture의 실제 저장 ACK
+  round-trip을 통합 테스트로 검증합니다.
 
 ### 11.4 CLI 입력
 
@@ -1081,24 +1085,26 @@ enum BriefingViewState: Equatable {
 ## 16. ViewModel과 관찰
 
 ```swift
-@MainActor
-@Observable
+@MainActor @Observable
 final class MenuBarViewModel {
     private(set) var briefingState: BriefingViewState
     private(set) var todayTodos: [TodoItem]
-    private(set) var recentAgentRuns: [AgentRun]
-    private(set) var hasUnreadAgentRun: Bool
+}
 
-    func onAppear() async
-    func generateBriefing() async
-    func addTodo(title: String) async
-    func toggleTodo(id: TodoID) async
-    func openAgentList() async
+@MainActor @Observable
+final class AgentActivityModel {
+    private(set) var runs: [AgentRun]
+    private(set) var hasUnread: Bool
+    private(set) var notificationAuthorization:
+        AgentNotificationAuthorizationState
+
+    func setVisible(_ visible: Bool)
+    func refreshNotificationAuthorization(notifier: AgentNotifier) async
 }
 ```
 
 - GRDB ValueObservation adapter가 tasks, 최신 briefing, 최근 agent_runs 변화를 AsyncSequence로 노출합니다.
-- ViewModel은 observation task를 보관하고 deinit 또는 앱 종료 시 cancel합니다.
+- 각 model은 담당 observation task를 보관하고 deinit 또는 앱 종료 시 cancel합니다.
 - DB callback에서 직접 UI state를 변경하지 않고 MainActor로 전달합니다.
 - 메뉴 창이 닫혀도 AgentEventService와 socket server는 AppLifecycleCoordinator가 유지합니다.
 
@@ -1128,7 +1134,7 @@ final class AppContainer {
 4. migration
 5. 90일 retention 정리
 6. repository/use case 조립
-7. notification delegate 등록
+7. notification adapter와 권한 상태 조립
 8. socket server 시작
 9. UI scene 제공
 
