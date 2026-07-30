@@ -1,7 +1,7 @@
 # 모래 High-Level Design
 
 > 상태: Accepted  
-> 최종 수정: 2026-07-29  
+> 최종 수정: 2026-07-30
 > 대상: MVP  
 > 상위 요구사항: [README](../README.md)  
 > 상세 설계: [LLD](LLD.md)
@@ -41,6 +41,16 @@ MVP가 제공하는 사용자 가치는 다음 세 가지입니다.
 - 외부 캘린더, 미리 알림, GitHub, Notion 연동
 - 알림에서 특정 작업 상세 화면으로 바로 이동
 - 에이전트 작업 실행 또는 제어
+
+### 2.3 현재 전달 상태
+
+Sprint 0, Sprint 1과 Sprint 1.5가 구현됐습니다. 현재 실행 가능한 범위는
+메뉴 막대 앱 셸, GRDB/SQLite 영구 저장, 할 일 CRUD·완료·재정렬·이월,
+어제 완료 요약과 소프트 블루 기반 light/dark UI입니다.
+
+아티클/브리핑, 에이전트 IPC·알림, 설정과 배포는 각각 Sprint 2~6에서
+구현합니다. 현재 메뉴 화면은 이 후속 영역의 section과 empty state만
+제공하며 네트워크 요청이나 이벤트 수신을 시작하지 않습니다.
 
 ## 3. 아키텍처 드라이버
 
@@ -294,6 +304,7 @@ erDiagram
         date taskDate
         string status
         int sortOrder
+        string source
         datetime completedAt
     }
 
@@ -342,6 +353,10 @@ erDiagram
 - `AgentRun(source, sessionId, turnId)`는 고유합니다.
 - `Article.canonicalURL`은 URL 정규화 후 고유합니다.
 - 완료된 Task는 `completedAt`을 가져야 합니다.
+- 이월 복사본은 새 ID를 사용하고 `source=carryover:<원본 task id>`로
+  provenance를 남깁니다.
+- 같은 대상 날짜와 같은 이월 원본 조합은 고유하며, 이미 이월한 원본은
+  후보 목록에서 제외합니다.
 - 원본 에이전트 payload, 피드 본문·요약과 아티클 HTML은 DB에 저장하지 않습니다.
 - `BriefingRun` 저장과 선택된 `Article` 저장은 하나의 트랜잭션으로 처리합니다.
 - 동일 이벤트가 재수신되면 소스 식별자 또는 안정적인 이벤트 fingerprint로 중복 저장을 방지합니다.
@@ -481,6 +496,8 @@ MVP는 외부 분석 SDK를 사용하지 않습니다.
 | [ADR-0008](adr/0008-agent-record-90-day-retention.md) | 에이전트 기록 90일 자동 보존 |
 | [ADR-0009](adr/0009-personal-dmg-and-local-storage.md) | 본인 전용 DMG와 일반 사용자 저장소 |
 | [ADR-0010](adr/0010-feed-metadata-only-article-recommendation.md) | 피드 메타데이터만 사용하는 아티클 추천 |
+| [ADR-0011](adr/0011-soft-blue-native-menu-bar-visual-system.md) | 소프트 블루 기반 네이티브 메뉴 막대 시각 체계 |
+| [ADR-0012](adr/0012-idempotent-todo-carry-over.md) | provenance 기반 할 일 이월 중복 방지 |
 
 ## 18. 확정된 추가 결정
 

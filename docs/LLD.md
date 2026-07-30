@@ -1,7 +1,7 @@
 # 모래 Low-Level Design
 
 > 상태: Accepted  
-> 최종 수정: 2026-07-29  
+> 최종 수정: 2026-07-30
 > 대상: MVP  
 > 상위 문서: [README](../README.md), [HLD](HLD.md)  
 > 아키텍처 결정: [ADR](adr/)
@@ -18,6 +18,10 @@
 - 원본 Hook/notify payload와 RSS/Atom 응답 body는 메모리에서 처리한 뒤 폐기합니다.
 - 사용자 에이전트 작업은 모래의 이벤트 전달 실패 때문에 실패하지 않아야 합니다.
 - 시간의 순간은 UTC Unix millisecond, 사용자의 날짜는 `LocalDay`로 명시적으로 구분합니다.
+
+현재 as-built 범위는 Sprint 0, Sprint 1과 Sprint 1.5입니다. 따라서 이
+문서의 Todo·DB·메뉴 막대 UI 절은 구현과 동기화돼 있고, Article,
+Briefing, Agent IPC·알림, Settings·배포 절은 후속 Sprint의 확정 설계입니다.
 
 ## 2. 빌드 단위
 
@@ -258,7 +262,7 @@ struct AgentEvent: Identifiable, Equatable, Sendable {
 
 `closedAt`과 `status`는 별개입니다. Claude의 새 `UserPromptSubmit`이 왔는데 이전 열린 턴에 terminal event가 없으면 이전 턴을 `superseded`로 닫되 마지막 status는 유지합니다.
 
-## 6. SQLite v1 스키마
+## 6. SQLite 스키마와 마이그레이션
 
 DB 파일:
 
@@ -274,7 +278,7 @@ DB 파일:
 - `PRAGMA busy_timeout = 3000`
 - migration 이름은 `v1_initial`부터 증가시킵니다.
 
-### 6.1 DDL
+### 6.1 `v1_initial` DDL
 
 ```sql
 CREATE TABLE tasks (
@@ -299,10 +303,6 @@ CREATE TABLE tasks (
 
 CREATE INDEX idx_tasks_day_status_order
 ON tasks(task_day, status, sort_order);
-
-CREATE UNIQUE INDEX idx_tasks_carry_target_source
-ON tasks(task_day, source)
-WHERE source LIKE 'carryover:%';
 
 CREATE TABLE feed_sources (
     id                  TEXT PRIMARY KEY NOT NULL,
@@ -390,7 +390,20 @@ CREATE INDEX idx_agent_events_run_time
 ON agent_events(agent_run_id, occurred_at_ms);
 ```
 
-### 6.2 저장 형식
+### 6.2 `v2_unique_carry_over`
+
+```sql
+CREATE UNIQUE INDEX idx_tasks_carry_target_source
+ON tasks(task_day, source)
+WHERE source LIKE 'carryover:%';
+```
+
+이 migration은 이월 복사본의 `source` provenance를 이용해 같은 원본을
+같은 날짜로 두 번 복사하지 못하게 합니다. v2 이전 복사본은 모두
+`source=manual`로 저장돼 원본을 안전하게 역추론할 수 없으므로 자동
+backfill하지 않습니다.
+
+### 6.3 저장 형식
 
 - Bool은 SQLite INTEGER `0/1`로 저장합니다.
 - enum은 정의된 raw string/int로 저장합니다.
@@ -398,7 +411,7 @@ ON agent_events(agent_run_id, occurred_at_ms);
 - nullable 개인정보 필드는 opt-in이 꺼지면 새 값부터 nil로 저장합니다.
 - opt-in을 끌 때 기존 `project_path`, `title`, `last_message`도 한 트랜잭션에서 NULL로 지웁니다.
 
-### 6.3 데이터 정리
+### 6.4 데이터 정리
 
 ```sql
 DELETE FROM agent_runs
@@ -932,7 +945,7 @@ struct MoraeApp: App {
 3. 오늘 할 일
 4. 최근 에이전트 기록
 
-메뉴 창 권장 크기: 380×600pt. 내용은 ScrollView로 표시합니다.
+현재 메뉴 창 크기는 392×700pt이며 내용은 ScrollView로 표시합니다.
 
 ### 15.3 Briefing 상태
 
@@ -955,7 +968,16 @@ enum BriefingViewState: Equatable {
 - 빠른 추가는 inline TextField입니다.
 - Return으로 저장, Escape로 취소합니다.
 - title validation 오류는 inline으로 표시합니다.
-- drag reorder는 pending 목록 안에서만 허용합니다.
+- pointer reorder는 pending 목록 안에서만 허용합니다.
+- `MenuBarExtra(.window)`의 시스템 drop routing에 의존하지 않고, 행의
+  3pt threshold `DragGesture`와 named coordinate space의 row frame을
+  사용해 삽입 위치를 계산합니다.
+- drag 중 원본 행을 흐리게 하고 반투명 preview를 포인터와 함께 이동하며,
+  유효한 삽입 위치에 2pt 소프트 블루 divider를 표시합니다.
+- mouse-up에서 유효한 위치가 확정된 경우에만 repository reorder를 한 번
+  호출합니다.
+- 6-dot handle은 이동 가능성을 나타내고, keyboard/VoiceOver에는 위·아래
+  이동 action을 제공합니다.
 - 완료 토글 시 `completedAt=now`.
 - 완료 취소 시 `completedAt=nil`.
 - 삭제는 undo 가능한 로컬 UI action으로 5초 제공하되 DB 삭제는 즉시 수행하고 undo 시 새 insert합니다.
@@ -1108,8 +1130,9 @@ categories:
 
 ### 20.2 DatabaseTests
 
-- `v1_initial` fresh migration
+- `v1_initial`과 `v2_unique_carry_over` fresh migration
 - 모든 CHECK/UNIQUE/FK 제약
+- 이월 provenance, 반복 요청 idempotency와 후보 목록 제외
 - BriefingRun + Article transaction rollback
 - AgentRun + AgentEvent atomic apply
 - duplicate eventKey idempotency
@@ -1158,7 +1181,7 @@ fixture:
 
 | 단위 | 완료 조건 |
 | --- | --- |
-| Database | v1 migration과 repository integration test 통과 |
+| Database | v1/v2 migration과 repository integration test 통과 |
 | Todo | CRUD, reorder, carry-over, local summary 동작 |
 | Briefing | 수동 피드 조회 1회, 메타데이터 선정·저장과 무재시도 검증 |
 | Agent IPC | Codex/Claude fixture end-to-end 저장과 알림 |

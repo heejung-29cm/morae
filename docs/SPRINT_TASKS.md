@@ -1,7 +1,7 @@
 # 모래 MVP Sprint Tasks
 
-> 상태: Ready for implementation (외부 준비 완료, Apple Developer Program 없이 진행 가능)  
-> 최종 수정: 2026-07-29  
+> 상태: Sprint 0·1·1.5 완료 / Sprint 2~6 준비 완료
+> 최종 수정: 2026-07-30
 > 기준 문서: [README](../README.md), [HLD](HLD.md), [LLD](LLD.md), [ADR](adr/)
 
 ## 1. 사용 방법
@@ -24,6 +24,19 @@
 - 원본 Hook payload와 피드 body가 로그나 fixture 산출물에 남지 않습니다.
 - 관련 LLD 계약이 바뀌면 코드와 같은 PR에서 문서를 갱신합니다.
 - 리뷰어가 태스크 설명만 보고 변경 범위와 검증 방법을 재현할 수 있습니다.
+
+현재 진행 요약:
+
+| Sprint | 상태 | 구현 결과 |
+| --- | --- | --- |
+| Sprint 0 | 완료 | Xcode 타깃, 공통 코어, GRDB/SQLite, 테스트 기반 |
+| Sprint 1 | 완료 | Todo CRUD·완료·재정렬·이월·어제 완료 요약 |
+| Sprint 1.5 | 완료 | 소프트 블루 UI, light/dark, inline panel, pointer reorder |
+| Sprint 2~6 | 예정 | 아티클, 브리핑, Agent IPC·알림, 설정·배포 |
+
+완료 표시는 현재 브랜치의 구현과 자동화 테스트를 기준으로 합니다. 후속
+Sprint용 DB 테이블과 empty state가 존재하더라도 실제 기능 연결 전에는
+완료로 간주하지 않습니다.
 
 ## 2. Sprint 0 — 실행 가능한 앱 기반
 
@@ -60,12 +73,12 @@ Sprint 종료 데모:
 | S1-04 | S | 완료·미완료 상태 전환 repository | S1-02 | 상태와 `completedAt` 불변식을 한 transaction에서 지키고 양방향 전환을 테스트합니다. |
 | S1-05 | XS | 할 일 삭제 repository | S1-02 | 대상 한 건만 삭제되며 존재하지 않는 ID 처리가 결정적으로 동작합니다. |
 | S1-06 | S | 할 일 순서 변경 repository | S1-02 | 같은 날짜 목록의 `sortOrder`를 transaction으로 재계산하고 중복 순서를 남기지 않습니다. |
-| S1-07 | S | 어제 미완료 항목 가져오기 use case | S1-02 | 한 번의 요청에서 선택한 항목을 각각 한 번만 오늘 날짜의 새 ID로 복제하고 원본을 변경하지 않습니다. |
+| S1-07 | S | 어제 미완료 항목 가져오기 use case | S1-02 | 선택한 항목을 오늘 날짜의 새 ID로 복제하고 원본은 유지합니다. 복사 provenance와 DB unique 제약으로 반복 요청·재시작 후에도 같은 날짜에 중복 이월되지 않습니다. |
 | S1-08 | S | 어제 한 일·오늘 할 일 요약 use case | S1-04 | 사용자 Calendar 기준 전날 완료 항목과 오늘 항목을 API 호출 없이 결정적으로 반환합니다. |
 | S1-09 | S | MenuBarExtra 기본 화면과 섹션 구성 | S0-07 | 날짜, 어제 완료, 오늘 할 일, 에이전트, 브리핑 영역의 empty state를 keyboard로 탐색할 수 있습니다. |
 | S1-10 | M | 할 일 목록 관찰과 완료 UI | S1-04, S1-09 | GRDB 변경이 목록에 반영되고 체크 동작, 중요 표시와 예상 시간이 올바르게 보입니다. |
 | S1-11 | M | 할 일 추가·편집·삭제 UI | S1-03, S1-05, S1-10 | validation, 저장, 취소, 삭제 확인 흐름을 UI test로 검증합니다. |
-| S1-12 | S | 순서 변경과 미완료 가져오기 UI | S1-06, S1-07, S1-10 | drag/reorder와 선택 가져오기가 keyboard 대안을 포함해 동작합니다. |
+| S1-12 | S | 순서 변경과 미완료 가져오기 UI | S1-06, S1-07, S1-10 | pointer reorder와 keyboard 이동이 동작하고, 가져온 항목은 즉시 후보에서 사라지며 재시작 후에도 제외됩니다. |
 
 Sprint 종료 데모:
 
@@ -88,7 +101,7 @@ Sprint 종료 데모:
 | S1.5-01 | XS | Soft-blue semantic token 구성 | S1-12 | `MoraeAccent` light/dark asset과 semantic foreground/background token이 native control에 적용됩니다. |
 | S1.5-02 | S | 패널·header·section hierarchy 정리 | S1.5-01 | 392pt 패널, compact header, 지역화 날짜와 section count가 ScrollView에서 잘리지 않습니다. |
 | S1.5-03 | S | Compact TodoRow 컴포넌트 분리 | S1.5-01 | checkbox, 중요도, 제목, 예상 시간과 action 영역이 재사용 가능한 row로 분리됩니다. |
-| S1.5-04 | M | 전용 drag handle과 drop indicator 구현 | S1.5-03 | pending handle에서만 drag가 시작되고 insertion line과 drop당 한 번의 reorder 저장을 검증합니다. |
+| S1.5-04 | M | drag affordance와 insertion indicator 구현 | S1.5-03 | pending 행에서 3pt 이상 이동하면 로컬 drag가 시작되고 insertion line과 확정 gesture당 한 번의 reorder 저장을 검증합니다. 6-dot handle과 keyboard 이동 action을 함께 제공합니다. |
 | S1.5-05 | S | Inline 편집·삭제·undo panel 정리 | S1.5-03 | 버튼 클릭 중 메뉴 패널이 닫히지 않고 저장·취소·삭제·undo focus가 예측 가능하게 동작합니다. |
 | S1.5-06 | S | Empty·error·validation 상태 통일 | S1.5-02, S1.5-03 | 네 section과 오류 상태가 공통 layout, 색상과 VoiceOver 문구를 사용합니다. |
 | S1.5-07 | S | Light/dark·keyboard·회귀 검증 | S1.5-04, S1.5-05, S1.5-06 | appearance별 checklist, keyboard-only 흐름과 기존 Sprint 1 테스트가 모두 통과합니다. |
@@ -96,7 +109,7 @@ Sprint 종료 데모:
 Sprint 종료 데모:
 
 - light/dark 모드에서 소프트 블루 accent와 native material이 일관되게 표시됩니다.
-- 전용 handle drag, drop indicator와 keyboard 순서 이동이 모두 동작합니다.
+- pending 행 pointer drag, insertion indicator와 keyboard 순서 이동이 모두 동작합니다.
 - 추가·완료·편집·삭제·undo 중 메뉴 패널이 닫히지 않습니다.
 - 긴 제목과 empty/error 상태가 392pt 패널 안에서 잘리지 않습니다.
 

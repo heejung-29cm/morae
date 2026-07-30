@@ -2,6 +2,7 @@
 
 > 대상: `MoraeApp` / macOS 14 이상  
 > 기준: Sprint 1.5 UI Polish 완료 빌드
+> 최종 수정: 2026-07-30
 
 ## 1. 실행
 
@@ -27,13 +28,14 @@
 4. 삭제 확인과 undo 배너
 5. 긴 한국어·영문 제목이 두 줄로 표시되는 목록
 
-## 3. Pointer와 Drag
+## 3. Pointer와 Reorder
 
-- [ ] pending 행의 6-dot 핸들에서만 drag가 시작됩니다.
+- [ ] pending 행에 6-dot 이동 affordance가 표시됩니다.
+- [ ] pending 행을 3pt 이상 끌면 반투명 preview가 포인터를 따라 이동합니다.
 - [ ] drag 중 원본 행이 흐려지고 대상 앞에 2pt 소프트 블루 선이 나타납니다.
-- [ ] drop 후 순서가 변경되며 앱을 다시 실행해도 유지됩니다.
-- [ ] 이미 같은 위치인 drop은 목록을 변경하지 않습니다.
-- [ ] checkbox, 편집, 삭제 버튼 클릭은 drag를 시작하지 않습니다.
+- [ ] mouse-up 후 순서가 변경되며 앱을 다시 실행해도 유지됩니다.
+- [ ] 이미 같은 위치인 gesture는 목록을 변경하지 않습니다.
+- [ ] checkbox, 편집, 삭제 버튼의 일반 클릭은 해당 action만 실행합니다.
 - [ ] completed 행에는 drag handle이 없습니다.
 
 ## 4. Keyboard
@@ -52,3 +54,4 @@
 - [ ] drag handle과 위·아래 이동 accessibility action을 읽고 실행할 수 있습니다.
 - [ ] 빈 상태, 입력 오류와 startup 오류의 종류·메시지·복구 문구를 읽습니다.
 - [ ] 어제 미완료 가져오기, 완료 전환, 편집, 삭제와 undo가 기존과 동일하게 동작합니다.
+- [ ] 가져온 어제 미완료 항목은 즉시 후보에서 사라지고 재실행 뒤에도 다시 나타나지 않습니다.

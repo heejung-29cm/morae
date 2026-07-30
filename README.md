@@ -2,9 +2,9 @@
 
 macOS 바탕화면에서 매일의 지식, 업무 계획, AI 에이전트 작업 상태를 한곳에 보여주는 개인 비서입니다. 마스코트는 움직이는 햄스터 캐릭터 "모래"입니다.
 
-> 문서 상태: MVP 사양 확정  
+> 문서 상태: MVP 사양 확정 / Sprint 0·1·1.5 구현 완료
 > 최초 작성: 2026-07-24  
-> 최종 수정: 2026-07-29  
+> 최종 수정: 2026-07-30
 > 코드네임: Hamster Bot (제품명 "모래"로 확정, bundle ID 등 식별자는 로마자 슬러그 `morae` 사용)
 
 설계 문서:
@@ -14,6 +14,26 @@ macOS 바탕화면에서 매일의 지식, 업무 계획, AI 에이전트 작업
 - [MVP Sprint Tasks](docs/SPRINT_TASKS.md)
 - [Sprint 1.5 UI Polish](docs/SPRINT_1_5_UI_POLISH.md)
 - [Architecture Decision Records](docs/adr/)
+
+## 현재 구현 상태
+
+2026-07-30 기준으로 Sprint 0, Sprint 1과 Sprint 1.5가 구현됐습니다.
+
+- macOS 14 이상을 대상으로 하는 `MenuBarExtra(.window)` 앱과 로컬 SQLite
+  저장소가 동작합니다.
+- 오늘 할 일을 추가·수정·완료·삭제하고, 포인터 drag 또는 keyboard
+  action으로 pending 항목 순서를 바꿀 수 있습니다.
+- 어제 완료 항목을 표시하고, 어제 미완료 항목을 선택해 오늘로 한 번만
+  복사할 수 있습니다. 복사 provenance와 DB 고유 제약으로 재실행 후에도
+  같은 항목의 중복 이월을 막습니다.
+- 소프트 블루 accent, 시스템 light/dark mode, inline 편집·삭제·undo와
+  공통 empty/error/validation UI가 적용됐습니다.
+- 전체 scheme의 자동화 테스트 41개가 통과합니다 (`MoraeApp` 31개, `MoraeCore` 9개, `HamsterEventCLI` 1개).
+
+아티클 수집·브리핑, 에이전트 IPC·알림, 실제 설정 화면과 DMG 출시는 아직
+구현되지 않았습니다. 현재 화면의 아티클·에이전트 영역은 empty state이며,
+브리핑 버튼은 비활성 상태입니다. 상세 진행 상태는
+[MVP Sprint Tasks](docs/SPRINT_TASKS.md)를 기준으로 합니다.
 
 ## 1. 제품 목표
 
@@ -29,12 +49,12 @@ macOS 바탕화면에서 매일의 지식, 업무 계획, AI 에이전트 작업
 
 모래는 하나의 macOS 앱 안에서 네 가지 인터페이스를 제공합니다.
 
-| 인터페이스 | 역할 |
-| --- | --- |
-| 바탕화면 위젯 | 아티클, 완료한 일, 오늘 할 일 등 자주 보는 요약 정보 (MVP 이후 2단계) |
-| 메뉴 막대 앱 | 상세 내용, 할 일 편집, 에이전트 상태, 설정 |
-| 마스코트(모래) | 메뉴 막대 앱 또는 별도 오버레이 창에서 움직이는 햄스터 캐릭터로 상태를 표현 (MVP 이후 2단계) |
-| macOS 알림 | 에이전트 작업 완료, 승인 필요, 실패 등 즉시 확인할 이벤트 |
+| 인터페이스 | 역할 | 상태 |
+| --- | --- | --- |
+| 바탕화면 위젯 | 아티클, 완료한 일, 오늘 할 일 등 자주 보는 요약 정보 | MVP 이후 2단계 |
+| 메뉴 막대 앱 | 상세 내용, 할 일 편집, 에이전트 상태, 설정 | Sprint 1.5까지 구현 |
+| 마스코트(모래) | 메뉴 막대 앱 또는 별도 오버레이 창에서 움직이는 햄스터 캐릭터로 상태를 표현 | MVP 이후 2단계 |
+| macOS 알림 | 에이전트 작업 완료, 승인 필요, 실패 등 즉시 확인할 이벤트 | Sprint 5 예정 |
 
 마스코트는 WidgetKit 위젯이 아닌 메뉴 막대 앱 또는 별도 오버레이 창에 배치합니다. WidgetKit은 갱신 횟수가 제한돼 실시간 애니메이션이 불가능하기 때문입니다.
 
@@ -541,6 +561,12 @@ MVP에서 제외합니다.
 - 로컬 저장소는 GRDB 기반 SQLite를 사용합니다 (§6, [ADR-0006](docs/adr/0006-grdb-local-persistence.md)).
 - 아티클 원문과 피드 본문은 가져오지 않고 피드 메타데이터만 사용합니다 (§4.1, [ADR-0010](docs/adr/0010-feed-metadata-only-article-recommendation.md)).
 - 에이전트 기록은 최근 90일간 보존합니다 (§10, [ADR-0008](docs/adr/0008-agent-record-90-day-retention.md)).
+- 메뉴 막대 UI는 소프트 블루와 시스템 light/dark mode를 사용하고,
+  재정렬은 메뉴 바 창 내부 pointer gesture로 처리합니다
+  ([ADR-0011](docs/adr/0011-soft-blue-native-menu-bar-visual-system.md)).
+- 어제 미완료 이월은 원본을 보존한 복사이며 provenance와 DB 고유 제약으로
+  중복을 방지합니다
+  ([ADR-0012](docs/adr/0012-idempotent-todo-carry-over.md)).
 
 ## 12. MVP 완료 조건
 

@@ -2,6 +2,7 @@
 
 > 상태: Implemented — automated verification complete
 > 작성: 2026-07-29  
+> 최종 수정: 2026-07-30
 > 선행: Sprint 1 완료  
 > 후속: Sprint 2  
 > 관련 결정: [ADR-0011](adr/0011-soft-blue-native-menu-bar-visual-system.md)
@@ -40,10 +41,12 @@ Sprint 1에서 검증한 할 일 관리 흐름을 유지하면서 메뉴 막대 
 
 ### 2.3 할 일 상호작용
 
-- pending row에만 전용 6-dot drag handle을 표시합니다.
-- 체크, 편집, 삭제 버튼 영역에서는 drag가 시작되지 않아야 합니다.
+- pending row에만 전용 6-dot drag affordance를 표시합니다.
+- pending 행에서 3pt 이상 이동하면 로컬 pointer drag를 시작합니다. 일반
+  버튼 click은 reorder로 처리하지 않습니다.
 - drag 중 원본 row의 opacity를 낮추고 대상 위치에 2pt 소프트 블루 insertion line을 표시합니다.
-- drop이 확정될 때만 기존 `TodoRepository.reorder`를 한 번 호출합니다.
+- mouse-up에서 유효한 위치가 확정될 때만 기존 `TodoRepository.reorder`를
+  한 번 호출합니다.
 - 위·아래 이동 버튼 또는 동등한 keyboard action을 유지해 drag가 유일한 조작법이 되지 않게 합니다.
 - 완료 항목은 drag 대상에서 제외하고 muted text와 취소선으로 상태를 함께 표현합니다.
 - 편집과 삭제 확인은 `MenuBarExtra(.window)` 내부 inline UI로 유지합니다. 시스템 sheet/alert로 되돌리지 않습니다.
@@ -77,7 +80,7 @@ Sprint 1에서 검증한 할 일 관리 흐름을 유지하면서 메뉴 막대 
 | S1.5-01 | XS | Soft-blue semantic token 구성 | S1-12 | `MoraeAccent` light/dark asset과 foreground/background token을 추가하고 light/dark에서 control 상태를 구분할 수 있습니다. |
 | S1.5-02 | S | 패널·header·section hierarchy 정리 | S1.5-01 | 392pt 패널, compact header, 지역화 날짜, hairline separator와 section count가 작은 화면의 ScrollView 안에서 잘리지 않습니다. |
 | S1.5-03 | S | Compact TodoRow 컴포넌트 분리 | S1.5-01 | checkbox, 중요도, 제목, 예상 시간과 action 영역이 재사용 컴포넌트로 분리되고 긴 제목·완료 상태가 안정적으로 배치됩니다. |
-| S1.5-04 | M | 전용 drag handle과 drop indicator 구현 | S1.5-03 | pending handle에서만 drag가 시작되고 insertion line이 표시되며 drop당 reorder transaction이 한 번 실행됩니다. |
+| S1.5-04 | M | drag affordance와 insertion indicator 구현 | S1.5-03 | pending 행의 로컬 pointer drag가 반투명 preview와 insertion line을 표시하며 확정 gesture당 reorder transaction이 한 번 실행됩니다. |
 | S1.5-05 | S | Inline 편집·삭제·undo panel 정리 | S1.5-03 | 저장·취소·삭제·undo 버튼 클릭 중 메뉴 패널이 닫히지 않고 focus가 해당 inline 영역 안에서 예측 가능하게 이동합니다. |
 | S1.5-06 | S | Empty·error·validation 상태 통일 | S1.5-02, S1.5-03 | 네 section의 empty state, startup 오류와 Todo validation이 공통 padding, icon, 색상 및 VoiceOver 문구를 사용합니다. |
 | S1.5-07 | S | Light/dark·keyboard·회귀 검증 | S1.5-04, S1.5-05, S1.5-06 | light/dark screenshot checklist, keyboard-only 주요 흐름, VoiceOver label과 기존 Sprint 1 테스트가 모두 통과합니다. |
@@ -87,7 +90,7 @@ Sprint 1에서 검증한 할 일 관리 흐름을 유지하면서 메뉴 막대 
 1. 색상과 spacing token을 먼저 정의합니다.
 2. 패널 shell과 section header를 정리합니다.
 3. TodoRow를 분리하되 기존 ViewModel·repository 동작은 변경하지 않습니다.
-4. drag/drop presentation과 keyboard 대안을 TodoRow 위에 연결합니다.
+4. 로컬 pointer drag presentation과 keyboard 대안을 TodoRow 위에 연결합니다.
 5. inline editor, delete confirmation과 undo banner를 같은 visual language로 맞춥니다.
 6. 모든 empty/error 상태를 통일합니다.
 7. light/dark 및 interaction regression을 수행합니다.
@@ -96,15 +99,15 @@ Sprint 1에서 검증한 할 일 관리 흐름을 유지하면서 메뉴 막대 
 
 - light/dark 모드 모두에서 소프트 블루가 기본 accent로 표시됩니다.
 - 빠른 추가, 완료 전환, 편집, 삭제 확인과 undo 중 패널이 닫히지 않습니다.
-- drag handle을 잡으면 insertion line이 나타나고 drop 후 순서가 재실행 뒤에도 유지됩니다.
-- 체크·편집·삭제 버튼을 클릭해도 drag가 시작되지 않습니다.
+- pending 행을 3pt 이상 끌면 insertion line이 나타나고 mouse-up 후 순서가 재실행 뒤에도 유지됩니다.
+- 체크·편집·삭제 버튼을 일반 클릭하면 해당 action만 실행됩니다.
 - keyboard만으로 추가, 완료 전환, 순서 이동, 편집 저장·취소와 삭제 확인을 수행할 수 있습니다.
 - 긴 제목, 빈 목록, validation 오류와 startup 오류가 392pt 패널 안에서 잘리지 않습니다.
 
 ## 7. 검증 전략
 
 - 기존 repository, ViewModel과 Sprint 1 인수 테스트를 회귀 실행합니다.
-- drag 상태 계산은 UI에서 분리해 source/target/no-op 경계를 단위 테스트합니다.
+- 재정렬 계획은 UI에서 분리해 source/target/end/no-op 경계를 단위 테스트합니다.
 - reorder 저장 호출 횟수를 Stub repository로 검증합니다.
 - Xcode에서 light/dark appearance별 실제 `MenuBarExtra`를 수동 점검합니다.
 - VoiceOver label은 상태와 action을 색상 없이 이해할 수 있는지 확인합니다.
@@ -115,8 +118,10 @@ Sprint 1에서 검증한 할 일 관리 흐름을 유지하면서 메뉴 막대 
 - `MoraeAccent` Asset Catalog에 light/dark 소프트 블루를 추가했습니다.
 - 392pt native material 패널, compact header와 section count를 적용했습니다.
 - `TodoRowView`, `TodoInlinePanels`, `MenuBarStateView`로 화면 요소를 분리했습니다.
-- pending 전용 drag handle, insertion indicator와 keyboard·VoiceOver 이동 action을 추가했습니다.
-- 의미 없는 drop을 제외하고 확정된 drop당 repository reorder가 한 번 호출되는지 테스트합니다.
+- pending 전용 6-dot affordance, 반투명 preview, insertion indicator와 keyboard·VoiceOver 이동 action을 추가했습니다.
+- 시스템 `onDrop` 대신 named coordinate space의 row frame과 `DragGesture`를
+  사용하며, 의미 없는 위치를 제외하고 확정 gesture당 repository
+  reorder가 한 번 호출되는지 테스트합니다.
 - 시스템 sheet/alert 없이 inline 편집·삭제·undo 흐름을 유지합니다.
-- macOS Debug build와 전체 31개 자동화 테스트가 통과했습니다.
+- macOS Debug build와 전체 scheme 자동화 테스트 41개가 통과했습니다 (`MoraeApp` 31개, `MoraeCore` 9개, `HamsterEventCLI` 1개).
 - 자동화 테스트와 사용자의 실제 `MenuBarExtra` 점검 범위는 [데모 체크리스트](SPRINT_1_5_DEMO_CHECKLIST.md)로 구분합니다.
