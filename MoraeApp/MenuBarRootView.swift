@@ -240,15 +240,8 @@ struct MenuBarRootView: View {
             } else {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(viewModel.todayTodos) { item in
+                        todoDivider(before: item)
                         todayTodoRow(item)
-                        if item.id != viewModel.todayTodos.last?.id {
-                            Rectangle()
-                                .fill(MoraeColor.separator)
-                                .frame(height: 0.5)
-                                .padding(.leading, 42)
-                                .padding(.trailing, MoraeSpacing.small)
-                                .accessibilityHidden(true)
-                        }
                     }
                 }
             }
@@ -307,6 +300,45 @@ struct MenuBarRootView: View {
     }
 
     @ViewBuilder
+    private func todoDivider(before item: TodoItem) -> some View {
+        let isFirst = viewModel.todayTodos.first?.id == item.id
+        let isDropTarget = dropTargetID == item.id
+
+        if isFirst {
+            if isDropTarget {
+                dropInsertionLine
+                    .frame(height: 0)
+                    .zIndex(1)
+            }
+        } else {
+            ZStack {
+                Rectangle()
+                    .fill(MoraeColor.separator)
+                    .frame(height: 0.5)
+                    .padding(.leading, 42)
+                    .padding(.trailing, MoraeSpacing.small)
+                if isDropTarget {
+                    dropInsertionLine
+                }
+            }
+            .frame(height: 0.5)
+            .accessibilityHidden(true)
+        }
+    }
+
+    private var dropInsertionLine: some View {
+        Capsule()
+            .fill(MoraeColor.accent.opacity(0.76))
+            .frame(height: 2)
+            .padding(.horizontal, MoraeSpacing.xSmall)
+            .shadow(
+                color: MoraeColor.accent.opacity(0.24),
+                radius: 2
+            )
+            .accessibilityHidden(true)
+    }
+
+    @ViewBuilder
     private func todayTodoRow(_ item: TodoItem) -> some View {
         if item.status == .pending {
             todoRowContent(item)
@@ -350,7 +382,6 @@ struct MenuBarRootView: View {
                 ? item.id.storageValue
                 : nil,
             isDragging: draggedTodoID == item.id,
-            showsDropIndicator: dropTargetID == item.id,
             onToggleCompletion: {
                 Task {
                     await viewModel.toggleTodo(id: item.id)

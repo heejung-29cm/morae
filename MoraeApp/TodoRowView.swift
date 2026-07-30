@@ -7,7 +7,6 @@ struct TodoRowView: View {
     let canMoveDown: Bool
     let dragIdentifier: String?
     let isDragging: Bool
-    let showsDropIndicator: Bool
     let onToggleCompletion: () -> Void
     let onDragStarted: () -> Void
     let onMoveUp: () -> Void
@@ -42,15 +41,6 @@ struct TodoRowView: View {
             )
         )
         .opacity(isDragging ? 0.46 : 1)
-        .overlay(alignment: .top) {
-            if showsDropIndicator {
-                Capsule()
-                    .fill(MoraeColor.accent)
-                    .frame(height: 2)
-                    .offset(y: -1)
-                    .accessibilityHidden(true)
-            }
-        }
         .accessibilityElement(children: .contain)
         .accessibilityActions {
             if item.status == .pending, canMoveUp {
@@ -194,10 +184,6 @@ private struct TodoDragPreview: View {
             TodoDragHandleGlyph()
                 .foregroundStyle(MoraeColor.mutedForeground)
                 .frame(width: 18, height: 24)
-            Image(systemName: "circle")
-                .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(MoraeColor.secondaryForeground)
-                .frame(width: 16, height: 16)
             HStack(alignment: .firstTextBaseline, spacing: MoraeSpacing.xSmall) {
                 if item.priority == .important {
                     Image(systemName: "star.fill")
