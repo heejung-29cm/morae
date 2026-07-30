@@ -84,6 +84,57 @@ final class FeedParsingTests: XCTestCase {
         XCTAssertEqual(atom.count, 2)
     }
 
+    func testSprintTwoDemoDeterministicallySelectsOneMetadataCandidate() throws {
+        let parser = FeedMetadataParser()
+        let source = makeSource(name: "Official Fixture")
+        let rss = try parser.parse(
+            data: FixtureLoader.data(named: "rss-feed", extension: "xml"),
+            source: source
+        )
+        let atom = try parser.parse(
+            data: FixtureLoader.data(named: "atom-feed", extension: "xml"),
+            source: source
+        )
+        let candidates = rss + atom
+        let selector = ArticleSelector()
+        let now = Date(timeIntervalSince1970: 1_785_380_400)
+
+        let selected = try selector.select(
+            from: candidates,
+            interests: ["Swift", "concurrency"],
+            readURLs: [],
+            recentlyRecommendedURLs: [],
+            now: now
+        )
+        let selectedFromReversedInput = try selector.select(
+            from: Array(candidates.reversed()),
+            interests: ["Swift", "concurrency"],
+            readURLs: [],
+            recentlyRecommendedURLs: [],
+            now: now
+        )
+
+        XCTAssertEqual(selected, selectedFromReversedInput)
+        XCTAssertEqual(selected?.title, "Swift concurrency patterns")
+        XCTAssertEqual(
+            selected?.articleURL.absoluteString,
+            "https://fixture.invalid/articles/concurrency"
+        )
+        XCTAssertEqual(selected?.sourceName, "Official Fixture")
+        XCTAssertEqual(
+            selected?.publishedAt,
+            Date(timeIntervalSince1970: 1_785_294_000)
+        )
+        let storedFieldNames = Set(
+            Mirror(reflecting: try XCTUnwrap(selected))
+                .children
+                .compactMap(\.label)
+        )
+        XCTAssertTrue(
+            storedFieldNames.isDisjoint(with: ["body", "summary", "content"])
+        )
+    }
+
     private func makeSource(name: String) -> FeedSource {
         let instant = Date(unixMilliseconds: 1_775_039_400_000)
         return FeedSource(

@@ -1,6 +1,6 @@
 # 모래 MVP Sprint Tasks
 
-> 상태: Sprint 0·1·1.5 완료 / Sprint 2~6 준비 완료
+> 상태: Sprint 0·1·1.5·2 완료 / Sprint 3~6 준비 완료
 > 최종 수정: 2026-07-30
 > 기준 문서: [README](../README.md), [HLD](HLD.md), [LLD](LLD.md), [ADR](adr/)
 
@@ -32,7 +32,8 @@
 | Sprint 0 | 완료 | Xcode 타깃, 공통 코어, GRDB/SQLite, 테스트 기반 |
 | Sprint 1 | 완료 | Todo CRUD·완료·재정렬·이월·어제 완료 요약 |
 | Sprint 1.5 | 완료 | 소프트 블루 UI, light/dark, inline panel, pointer reorder |
-| Sprint 2~6 | 예정 | 아티클, 브리핑, Agent IPC·알림, 설정·배포 |
+| Sprint 2 | 완료 | 기본 피드, 제한된 HTTP, RSS/Atom, 정규화·선정·Article 저장소 |
+| Sprint 3~6 | 예정 | 수동 브리핑 UI, Agent IPC·알림, 설정·배포 |
 
 완료 표시는 현재 브랜치의 구현과 자동화 테스트를 기준으로 합니다. 후속
 Sprint용 DB 테이블과 empty state가 존재하더라도 실제 기능 연결 전에는
@@ -132,6 +133,16 @@ Sprint 종료 데모:
 
 - 고정 피드 fixture에서 아티클 한 개를 재현 가능하게 선정합니다.
 - 결과에는 제목, 링크, 출처와 게시일만 포함되고 피드 본문·요약은 저장되지 않습니다.
+
+구현 결과:
+
+- S2-01~S2-08을 task별 커밋으로 구현하고 현재 브랜치에 푸시했습니다.
+- 고정 RSS/Atom fixture를 한 후보 집합으로 파싱한 뒤 입력 순서를 뒤집어도
+  같은 canonical URL을 고르는 통합 테스트가 통과합니다.
+- Sprint 2는 화면과 네트워크 실행을 연결하지 않습니다. 사용자의 버튼
+  클릭 한 번에만 피드를 조회하는 조립은 Sprint 3에서 구현합니다.
+- 상세 재현 절차는 [Sprint 2 데모 체크리스트](SPRINT_2_DEMO_CHECKLIST.md)를
+  따릅니다.
 
 ## 5. Sprint 3 — 수동 브리핑
 

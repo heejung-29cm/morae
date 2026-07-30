@@ -2,7 +2,7 @@
 
 macOS 바탕화면에서 매일의 지식, 업무 계획, AI 에이전트 작업 상태를 한곳에 보여주는 개인 비서입니다. 마스코트는 움직이는 햄스터 캐릭터 "모래"입니다.
 
-> 문서 상태: MVP 사양 확정 / Sprint 0·1·1.5 구현 완료
+> 문서 상태: MVP 사양 확정 / Sprint 0·1·1.5·2 구현 완료
 > 최초 작성: 2026-07-24  
 > 최종 수정: 2026-07-30
 > 코드네임: Hamster Bot (제품명 "모래"로 확정, bundle ID 등 식별자는 로마자 슬러그 `morae` 사용)
@@ -13,11 +13,13 @@ macOS 바탕화면에서 매일의 지식, 업무 계획, AI 에이전트 작업
 - [Low-Level Design](docs/LLD.md)
 - [MVP Sprint Tasks](docs/SPRINT_TASKS.md)
 - [Sprint 1.5 UI Polish](docs/SPRINT_1_5_UI_POLISH.md)
+- [Sprint 2 Demo Checklist](docs/SPRINT_2_DEMO_CHECKLIST.md)
 - [Architecture Decision Records](docs/adr/)
 
 ## 현재 구현 상태
 
-2026-07-30 기준으로 Sprint 0, Sprint 1과 Sprint 1.5가 구현됐습니다.
+2026-07-30 기준으로 Sprint 0, Sprint 1, Sprint 1.5와 Sprint 2가
+구현됐습니다.
 
 - macOS 14 이상을 대상으로 하는 `MenuBarExtra(.window)` 앱과 로컬 SQLite
   저장소가 동작합니다.
@@ -28,11 +30,20 @@ macOS 바탕화면에서 매일의 지식, 업무 계획, AI 에이전트 작업
   같은 항목의 중복 이월을 막습니다.
 - 소프트 블루 accent, 시스템 light/dark mode, inline 편집·삭제·undo와
   공통 empty/error/validation UI가 적용됐습니다.
-- 전체 scheme의 자동화 테스트 41개가 통과합니다 (`MoraeApp` 31개, `MoraeCore` 9개, `HamsterEventCLI` 1개).
+- MDN, web.dev, Chrome for Developers와 React Blog의 기본 피드를 최초
+  실행에 한 번 seed합니다. 제한된 HTTPS client와 RSS/Atom 메타데이터
+  parser가 제목·링크·출처·게시일만 읽습니다.
+- canonical URL 중복 제거, 최신성·관심사·공식 출처·읽음·최근 추천
+  이력을 반영한 결정론적 아티클 선정과 로컬 Article 저장소가
+  구현됐습니다.
+- 전체 scheme의 자동화 테스트 63개가 통과합니다 (`MoraeApp` 46개,
+  `MoraeCore` 16개, `HamsterEventCLI` 1개).
 
-아티클 수집·브리핑, 에이전트 IPC·알림, 실제 설정 화면과 DMG 출시는 아직
-구현되지 않았습니다. 현재 화면의 아티클·에이전트 영역은 empty state이며,
-브리핑 버튼은 비활성 상태입니다. 상세 진행 상태는
+Sprint 2는 아티클 수집·선정 기반까지 구현하며 앱 실행만으로 네트워크를
+시작하지 않습니다. 수동 브리핑 조립과 화면 연결은 Sprint 3 범위입니다.
+따라서 현재 화면의 아티클·에이전트 영역은 empty state이고 브리핑 버튼은
+비활성 상태입니다. 에이전트 IPC·알림, 실제 설정 화면과 DMG 출시도 아직
+구현되지 않았습니다. 상세 진행 상태는
 [MVP Sprint Tasks](docs/SPRINT_TASKS.md)를 기준으로 합니다.
 
 ## 1. 제품 목표

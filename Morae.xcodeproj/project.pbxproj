@@ -60,6 +60,7 @@
 		230000000000000000000011 /* ArticleSelectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 130000000000000000000010 /* ArticleSelectorTests.swift */; };
 		230000000000000000000012 /* ArticleRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 130000000000000000000011 /* ArticleRepository.swift */; };
 		230000000000000000000013 /* ArticleRepositoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 130000000000000000000012 /* ArticleRepositoryTests.swift */; };
+		230000000000000000000014 /* libMoraeCore.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 000000000000000000000020 /* libMoraeCore.a */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -129,7 +130,7 @@
 		000000000000000000000054 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (00000000000000000000003B /* libMoraeCore.a in Frameworks */, 00000000000000000000003D /* GRDB in Frameworks */, 00000000000000000000003E /* FeedKit in Frameworks */,); runOnlyForDeploymentPostprocessing = 0; };
 		000000000000000000000057 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (000000000000000000000036 /* libMoraeCore.a in Frameworks */,); runOnlyForDeploymentPostprocessing = 0; };
 		000000000000000000000059 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (000000000000000000000037 /* libMoraeCore.a in Frameworks */, 000000000000000000000038 /* XCTest.framework in Frameworks */,); runOnlyForDeploymentPostprocessing = 0; };
-		00000000000000000000005B /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (000000000000000000000039 /* XCTest.framework in Frameworks */,); runOnlyForDeploymentPostprocessing = 0; };
+		00000000000000000000005B /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (230000000000000000000014 /* libMoraeCore.a in Frameworks */, 000000000000000000000039 /* XCTest.framework in Frameworks */,); runOnlyForDeploymentPostprocessing = 0; };
 		00000000000000000000005D /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (00000000000000000000003A /* XCTest.framework in Frameworks */,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXFrameworksBuildPhase section */
 

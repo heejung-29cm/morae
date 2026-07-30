@@ -19,9 +19,10 @@
 - 사용자 에이전트 작업은 모래의 이벤트 전달 실패 때문에 실패하지 않아야 합니다.
 - 시간의 순간은 UTC Unix millisecond, 사용자의 날짜는 `LocalDay`로 명시적으로 구분합니다.
 
-현재 as-built 범위는 Sprint 0, Sprint 1과 Sprint 1.5입니다. 따라서 이
-문서의 Todo·DB·메뉴 막대 UI 절은 구현과 동기화돼 있고, Article,
-Briefing, Agent IPC·알림, Settings·배포 절은 후속 Sprint의 확정 설계입니다.
+현재 as-built 범위는 Sprint 0, Sprint 1, Sprint 1.5와 Sprint 2입니다.
+따라서 이 문서의 Todo·DB·메뉴 막대 UI와 Feed·Article 절은 구현과
+동기화돼 있습니다. Briefing, Agent IPC·알림, Settings·배포 절은 후속
+Sprint의 확정 설계입니다.
 
 ## 2. 빌드 단위
 
@@ -403,7 +404,20 @@ WHERE source LIKE 'carryover:%';
 `source=manual`로 저장돼 원본을 안전하게 역추론할 수 없으므로 자동
 backfill하지 않습니다.
 
-### 6.3 저장 형식
+### 6.3 `v3_app_metadata`
+
+```sql
+CREATE TABLE app_metadata (
+    key     TEXT PRIMARY KEY NOT NULL,
+    value   TEXT NOT NULL
+);
+```
+
+`default_feeds_seeded=1` marker를 저장해 기본 피드가 최초 실행에만
+추가되도록 합니다. 사용자가 기본 피드를 삭제한 뒤 앱을 다시 실행해도
+자동 복구하지 않습니다.
+
+### 6.4 저장 형식
 
 - Bool은 SQLite INTEGER `0/1`로 저장합니다.
 - enum은 정의된 raw string/int로 저장합니다.
@@ -411,7 +425,7 @@ backfill하지 않습니다.
 - nullable 개인정보 필드는 opt-in이 꺼지면 새 값부터 nil로 저장합니다.
 - opt-in을 끌 때 기존 `project_path`, `title`, `last_message`도 한 트랜잭션에서 NULL로 지웁니다.
 
-### 6.4 데이터 정리
+### 6.5 데이터 정리
 
 ```sql
 DELETE FROM agent_runs
@@ -483,8 +497,11 @@ protocol FeedSourceRepository: Sendable {
 
 protocol ArticleRepository: Sendable {
     func previouslyRecommendedURLs() async throws -> Set<URL>
+    func readURLs() async throws -> Set<URL>
     func upsert(_ article: Article) async throws
     func find(canonicalURL: URL) async throws -> Article?
+    func setRead(canonicalURL: URL, isRead: Bool, at: Date) async throws
+    func setLiked(canonicalURL: URL, isLiked: Bool, at: Date) async throws
 }
 
 protocol BriefingRepository: Sendable {
@@ -1121,6 +1138,8 @@ categories:
 ### 20.1 MoraeCoreTests
 
 - LocalDay 생성과 time zone 변경
+- URL canonicalization과 입력 순서에 독립적인 feed candidate deduplication
+- 고정 Clock 기반 아티클 선정 점수와 동점 규칙
 - Todo validation
 - Agent status rank
 - transport envelope encode/decode
@@ -1130,9 +1149,11 @@ categories:
 
 ### 20.2 DatabaseTests
 
-- `v1_initial`과 `v2_unique_carry_over` fresh migration
+- `v1_initial`, `v2_unique_carry_over`, `v3_app_metadata` fresh migration
 - 모든 CHECK/UNIQUE/FK 제약
 - 이월 provenance, 반복 요청 idempotency와 후보 목록 제외
+- 기본 피드 one-time seed와 Article canonical URL unique upsert
+- Article 읽음·좋아요와 최근 90일 추천 조회
 - BriefingRun + Article transaction rollback
 - AgentRun + AgentEvent atomic apply
 - duplicate eventKey idempotency
@@ -1151,6 +1172,7 @@ fixture:
 - 잘못된 URL
 - 2 MiB 초과
 - 304 response
+- RSS/Atom 통합 fixture의 결정론적 선정과 metadata-only 모델
 
 ### 20.4 AgentIPCTests
 
@@ -1181,7 +1203,7 @@ fixture:
 
 | 단위 | 완료 조건 |
 | --- | --- |
-| Database | v1/v2 migration과 repository integration test 통과 |
+| Database | v1/v2/v3 migration과 repository integration test 통과 |
 | Todo | CRUD, reorder, carry-over, local summary 동작 |
 | Briefing | 수동 피드 조회 1회, 메타데이터 선정·저장과 무재시도 검증 |
 | Agent IPC | Codex/Claude fixture end-to-end 저장과 알림 |
