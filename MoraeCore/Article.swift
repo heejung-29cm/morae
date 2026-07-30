@@ -30,3 +30,31 @@ public struct FeedSource: Identifiable, Equatable, Sendable {
         self.updatedAt = updatedAt
     }
 }
+
+public struct FeedCandidate: Hashable, Sendable {
+    public let sourceID: UUID
+    public let sourceName: String
+    public let sourceURL: URL
+    public let articleURL: URL
+    public let title: String
+    public let publishedAt: Date?
+    public let isOfficialSource: Bool
+
+    public init(
+        sourceID: UUID,
+        sourceName: String,
+        sourceURL: URL,
+        articleURL: URL,
+        title: String,
+        publishedAt: Date?,
+        isOfficialSource: Bool
+    ) {
+        self.sourceID = sourceID
+        self.sourceName = sourceName
+        self.sourceURL = sourceURL
+        self.articleURL = articleURL
+        self.title = title
+        self.publishedAt = publishedAt
+        self.isOfficialSource = isOfficialSource
+    }
+}
