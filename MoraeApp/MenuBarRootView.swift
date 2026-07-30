@@ -1,5 +1,6 @@
 import MoraeCore
 import SwiftUI
+import UniformTypeIdentifiers
 
 enum MenuBarSection: String, CaseIterable, Sendable {
     case article
@@ -42,14 +43,81 @@ enum MenuBarSection: String, CaseIterable, Sendable {
     }
 }
 
+private enum TodoDropInsertion: Equatable {
+    case before(TodoID)
+    case end
+
+    var targetID: TodoID? {
+        switch self {
+        case let .before(id): id
+        case .end: nil
+        }
+    }
+}
+
+private struct TodoRowDropDelegate: DropDelegate {
+    let sourceID: TodoID?
+    let targetID: TodoID
+    let orderedIDs: [TodoID]
+    let onTargetChanged: (TodoDropInsertion?) -> Void
+    let onDrop: (TodoID, TodoDropInsertion) -> Bool
+
+    func validateDrop(info: DropInfo) -> Bool {
+        sourceID != nil
+            && sourceID != targetID
+            && info.hasItemsConforming(to: [UTType.plainText])
+    }
+
+    func dropEntered(info: DropInfo) {
+        onTargetChanged(insertion)
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        guard insertion != nil else {
+            return DropProposal(operation: .forbidden)
+        }
+        return DropProposal(operation: .move)
+    }
+
+    func dropExited(info: DropInfo) {
+        onTargetChanged(nil)
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        guard let sourceID, let insertion else {
+            onTargetChanged(nil)
+            return false
+        }
+        return onDrop(sourceID, insertion)
+    }
+
+    private var insertion: TodoDropInsertion? {
+        guard let sourceID,
+              let sourceIndex = orderedIDs.firstIndex(of: sourceID),
+              let targetIndex = orderedIDs.firstIndex(of: targetID),
+              sourceIndex != targetIndex else {
+            return nil
+        }
+
+        if sourceIndex < targetIndex {
+            let nextIndex = targetIndex + 1
+            if orderedIDs.indices.contains(nextIndex) {
+                return .before(orderedIDs[nextIndex])
+            }
+            return .end
+        }
+        return .before(targetID)
+    }
+}
+
 @MainActor
 struct MenuBarRootView: View {
     let container: AppContainer
     @State private var viewModel: MenuBarViewModel
     @State private var quickAddTitle = ""
     @State private var editingDraft: TodoEditDraft?
-    @State private var dropTargetID: TodoID?
-    @State private var isEndDropTarget = false
+    @State private var draggedTodoID: TodoID?
+    @State private var dropInsertion: TodoDropInsertion?
     @FocusState private var isQuickAddFocused: Bool
 
     init(container: AppContainer) {
@@ -303,61 +371,46 @@ struct MenuBarRootView: View {
         }
 
         return VStack(alignment: .leading, spacing: 0) {
-            ForEach(pendingItems) { item in
-                todoDropDivider(before: item, isFirst: item.id == pendingItems.first?.id)
-                todoRowContent(item)
-            }
-            if !pendingItems.isEmpty {
-                todoEndDropZone(showsStaticLine: !completedItems.isEmpty)
+            ForEach(Array(pendingItems.enumerated()), id: \.element.id) { index, item in
+                VStack(alignment: .leading, spacing: 0) {
+                    if index > 0 {
+                        staticTodoDivider
+                    }
+                    todoRowContent(item)
+                }
+                .overlay(alignment: .top) {
+                    if dropInsertion == .before(item.id) {
+                        dropInsertionLine
+                    }
+                }
+                .overlay(alignment: .bottom) {
+                    if index == pendingItems.count - 1,
+                       dropInsertion == .end {
+                        dropInsertionLine
+                    }
+                }
+                .onDrop(
+                    of: [UTType.plainText],
+                    delegate: TodoRowDropDelegate(
+                        sourceID: draggedTodoID,
+                        targetID: item.id,
+                        orderedIDs: pendingItems.map(\.id),
+                        onTargetChanged: { insertion in
+                            dropInsertion = insertion
+                        },
+                        onDrop: { sourceID, insertion in
+                            acceptTodoDrop(sourceID, at: insertion)
+                        }
+                    )
+                )
             }
             ForEach(completedItems) { item in
-                if item.id != completedItems.first?.id {
+                if item.id != completedItems.first?.id || !pendingItems.isEmpty {
                     staticTodoDivider
                 }
                 todoRowContent(item)
             }
         }
-    }
-
-    private func todoDropDivider(
-        before item: TodoItem,
-        isFirst: Bool
-    ) -> some View {
-        ZStack {
-            if !isFirst {
-                staticTodoDivider
-            }
-            if dropTargetID == item.id {
-                dropInsertionLine
-            }
-        }
-        .frame(height: 6)
-        .contentShape(Rectangle())
-        .dropDestination(for: String.self) { identifiers, _ in
-            acceptTodoDrop(identifiers, before: item.id)
-        } isTargeted: { isTargeted in
-            updateDropTarget(isTargeted, before: item.id)
-        }
-        .accessibilityHidden(true)
-    }
-
-    private func todoEndDropZone(showsStaticLine: Bool) -> some View {
-        ZStack {
-            if showsStaticLine {
-                staticTodoDivider
-            }
-            if isEndDropTarget {
-                dropInsertionLine
-            }
-        }
-        .frame(height: 6)
-        .contentShape(Rectangle())
-        .dropDestination(for: String.self) { identifiers, _ in
-            acceptTodoDrop(identifiers, before: nil)
-        } isTargeted: { isTargeted in
-            updateDropTarget(isTargeted, before: nil)
-        }
-        .accessibilityHidden(true)
     }
 
     private var staticTodoDivider: some View {
@@ -382,39 +435,25 @@ struct MenuBarRootView: View {
     }
 
     private func acceptTodoDrop(
-        _ identifiers: [String],
-        before targetID: TodoID?
+        _ sourceID: TodoID,
+        at insertion: TodoDropInsertion
     ) -> Bool {
         defer {
-            dropTargetID = nil
-            isEndDropTarget = false
+            draggedTodoID = nil
+            dropInsertion = nil
         }
-        guard let sourceStorageID = identifiers.first,
-              let source = pendingTodo(storageID: sourceStorageID),
-              TodoReorderPlan.moving(
-                source.id,
+        let targetID = insertion.targetID
+        guard TodoReorderPlan.moving(
+                sourceID,
                 before: targetID,
                 in: pendingTodoIDs
               ) != nil else {
             return false
         }
         Task {
-            await viewModel.movePending(id: source.id, before: targetID)
+            await viewModel.movePending(id: sourceID, before: targetID)
         }
         return true
-    }
-
-    private func updateDropTarget(
-        _ isTargeted: Bool,
-        before targetID: TodoID?
-    ) {
-        if isTargeted {
-            dropTargetID = targetID
-            isEndDropTarget = targetID == nil
-        } else if dropTargetID == targetID {
-            dropTargetID = nil
-            isEndDropTarget = false
-        }
     }
 
     private func todoRowContent(_ item: TodoItem) -> some View {
@@ -426,6 +465,10 @@ struct MenuBarRootView: View {
             dragIdentifier: item.status == .pending
                 ? item.id.storageValue
                 : nil,
+            onDragStarted: { storageID in
+                draggedTodoID = pendingTodo(storageID: storageID)?.id
+                dropInsertion = nil
+            },
             onToggleCompletion: {
                 Task {
                     await viewModel.toggleTodo(id: item.id)

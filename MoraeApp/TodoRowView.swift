@@ -6,6 +6,7 @@ struct TodoRowView: View {
     let canMoveUp: Bool
     let canMoveDown: Bool
     let dragIdentifier: String?
+    let onDragStarted: (String) -> Void
     let onToggleCompletion: () -> Void
     let onMoveUp: () -> Void
     let onMoveDown: () -> Void
@@ -34,7 +35,8 @@ struct TodoRowView: View {
         .modifier(
             TodoDragSourceModifier(
                 item: item,
-                identifier: dragIdentifier
+                identifier: dragIdentifier,
+                onDragStarted: onDragStarted
             )
         )
         .accessibilityElement(children: .contain)
@@ -155,11 +157,15 @@ struct TodoRowView: View {
 private struct TodoDragSourceModifier: ViewModifier {
     let item: TodoItem
     let identifier: String?
+    let onDragStarted: (String) -> Void
 
     @ViewBuilder
     func body(content: Content) -> some View {
         if let identifier {
-            content.draggable(identifier) {
+            content.onDrag {
+                onDragStarted(identifier)
+                return NSItemProvider(object: identifier as NSString)
+            } preview: {
                 TodoDragPreview(item: item)
             }
         } else {
