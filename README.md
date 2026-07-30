@@ -2,7 +2,7 @@
 
 macOS 바탕화면에서 매일의 지식, 업무 계획, AI 에이전트 작업 상태를 한곳에 보여주는 개인 비서입니다. 마스코트는 움직이는 햄스터 캐릭터 "모래"입니다.
 
-> 문서 상태: MVP 사양 확정 / Sprint 0~3.3 구현 완료
+> 문서 상태: MVP 사양 확정 / Sprint 0~4 구현 완료
 > 최초 작성: 2026-07-24  
 > 최종 수정: 2026-07-30
 > 코드네임: Hamster Bot (제품명 "모래"로 확정, bundle ID 등 식별자는 로마자 슬러그 `morae` 사용)
@@ -15,11 +15,12 @@ macOS 바탕화면에서 매일의 지식, 업무 계획, AI 에이전트 작업
 - [Sprint 1.5 UI Polish](docs/SPRINT_1_5_UI_POLISH.md)
 - [Sprint 2 Demo Checklist](docs/SPRINT_2_DEMO_CHECKLIST.md)
 - [Sprint 3 Demo Checklist](docs/SPRINT_3_DEMO_CHECKLIST.md)
+- [Sprint 4 Demo Checklist](docs/SPRINT_4_DEMO_CHECKLIST.md)
 - [Architecture Decision Records](docs/adr/)
 
 ## 현재 구현 상태
 
-2026-07-30 기준으로 Sprint 0부터 Sprint 3.3까지 구현됐습니다.
+2026-07-30 기준으로 Sprint 0부터 Sprint 4까지 구현됐습니다.
 
 - macOS 14 이상을 대상으로 하는 `MenuBarExtra(.window)` 앱과 로컬 SQLite
   저장소가 동작합니다.
@@ -42,11 +43,17 @@ macOS 바탕화면에서 매일의 지식, 업무 계획, AI 에이전트 작업
   중복 클릭 차단과 재시작 후 최신 결과 복원을 지원합니다.
 - 피드 자동 재시도나 재시도 버튼은 없으며 앱 실행과 메뉴 열기만으로
   네트워크 요청을 시작하지 않습니다.
-- 전체 scheme의 자동화 테스트는 81개입니다 (`MoraeApp` 58개,
-  `MoraeCore` 22개, `HamsterEventCLI` 1개).
+- 앱 프로세스가 실행되면 사용자 전용 Unix Domain Socket을 열고,
+  `hamster-event`가 Codex argv 또는 Claude stdin 이벤트 한 건을 900ms
+  best-effort 계약으로 전달합니다. UID·권한·symlink·frame/version/크기
+  검증과 안전한 ACK가 구현됐으며 재시도나 디스크 spool은 없습니다.
+- 전체 scheme의 자동화 테스트는 106개입니다 (`MoraeApp` 70개,
+  `MoraeCore` 26개, `HamsterEventCLI` 10개).
 
-에이전트 영역은 아직 empty state입니다. 에이전트 IPC·알림, 실제 설정
-화면과 DMG 출시는 Sprint 4~6 범위입니다. 상세 진행 상태는
+에이전트 영역은 아직 empty state입니다. Sprint 4는 안전한 전송 계층까지만
+완료했으며, source별 정규화·DB 저장·macOS 알림은 Sprint 5 범위입니다.
+따라서 현재 live socket은 검증된 이벤트에도 `unsupported_event` ACK를
+반환합니다. 실제 설정 화면과 DMG 출시는 Sprint 6 범위입니다. 상세 진행 상태는
 [MVP Sprint Tasks](docs/SPRINT_TASKS.md)를 기준으로 합니다.
 
 ## 1. 제품 목표
@@ -66,7 +73,7 @@ macOS 바탕화면에서 매일의 지식, 업무 계획, AI 에이전트 작업
 | 인터페이스 | 역할 | 상태 |
 | --- | --- | --- |
 | 바탕화면 위젯 | 아티클, 완료한 일, 오늘 할 일 등 자주 보는 요약 정보 | MVP 이후 2단계 |
-| 메뉴 막대 앱 | 상세 내용, 할 일 편집, 수동 브리핑, 에이전트 상태, 설정 | Sprint 3.3까지 구현 |
+| 메뉴 막대 앱 | 상세 내용, 할 일 편집, 수동 브리핑, 에이전트 상태, 설정 | Sprint 4까지 구현(에이전트 표시는 Sprint 5) |
 | 마스코트(모래) | 메뉴 막대 앱 또는 별도 오버레이 창에서 움직이는 햄스터 캐릭터로 상태를 표현 | MVP 이후 2단계 |
 | macOS 알림 | 에이전트 작업 완료, 승인 필요, 실패 등 즉시 확인할 이벤트 | Sprint 5 예정 |
 

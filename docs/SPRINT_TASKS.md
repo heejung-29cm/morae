@@ -1,6 +1,6 @@
 # 모래 MVP Sprint Tasks
 
-> 상태: Sprint 0~3.3 완료 / Sprint 4~6 준비 완료
+> 상태: Sprint 0~4 완료 / Sprint 5~6 준비 완료
 > 최종 수정: 2026-07-30
 > 기준 문서: [README](../README.md), [HLD](HLD.md), [LLD](LLD.md), [ADR](adr/)
 
@@ -37,7 +37,8 @@
 | Sprint 3.1 | 완료 | 큐레이션 기본 피드 전환, 소스 가중치, 기존 설치 migration |
 | Sprint 3.2 | 완료 | 개별 글 소스, 최근 30일 제한, 아티클 전용 UI |
 | Sprint 3.3 | 완료 | AI·FE 중심 제목 기반 주제 우선순위 |
-| Sprint 4~6 | 예정 | Agent IPC·알림, 설정·배포 |
+| Sprint 4 | 완료 | 안전한 Agent UDS 전송, best-effort CLI, ACK와 통합 테스트 |
+| Sprint 5~6 | 예정 | Agent 정규화·저장·알림, 설정·배포 |
 
 완료 표시는 현재 브랜치의 구현과 자동화 테스트를 기준으로 합니다. 후속
 Sprint용 DB 테이블과 empty state가 존재하더라도 실제 기능 연결 전에는

@@ -19,10 +19,11 @@
 - 사용자 에이전트 작업은 모래의 이벤트 전달 실패 때문에 실패하지 않아야 합니다.
 - 시간의 순간은 UTC Unix millisecond, 사용자의 날짜는 `LocalDay`로 명시적으로 구분합니다.
 
-현재 as-built 범위는 Sprint 0부터 Sprint 3.3까지입니다. 따라서 이
+현재 as-built 범위는 Sprint 0부터 Sprint 4까지입니다. 따라서 이
 문서의 Todo·DB·메뉴 막대 UI, Feed·Article과 수동 Briefing 절은 구현과
-동기화돼 있습니다. Agent IPC·알림,
-Settings·배포 절은 후속 Sprint의 확정 설계입니다.
+동기화돼 있으며 Agent IPC 절의 envelope, CLI, UDS client/server와 ACK도
+구현됐습니다. Agent 정규화·저장·알림, Settings·배포 절은 후속 Sprint의
+확정 설계입니다.
 
 ## 2. 빌드 단위
 
@@ -803,6 +804,17 @@ ACK:
 ```
 
 helper는 성공, 전달 실패, 잘못된 subcommand, 잘못된 payload를 포함한 모든 호출에서 stdout/stderr 출력 없이 exit code 0으로 종료합니다. Hook 설정 검증은 앱 설정 화면의 설치 확인 기능과 문서로 제공하며 에이전트 프로세스에는 실패를 전파하지 않습니다.
+
+as-built 경계:
+
+- `AppContainer.live()`가 DB 초기화 성공 후 listener를 시작하고 앱 수명 동안
+  보유합니다. 앱 종료나 container 해제 시 socket을 닫고 안전하게 제거합니다.
+- 부모 `0700`, socket `0600`, owner·symlink·peer UID 검증을 적용합니다.
+- connection 하나에서 frame 하나만 읽고 동시 처리 수는 8개로 제한합니다.
+- Sprint 4의 기본 `AgentEnvelopeHandling` 구현은
+  `unsupported_event` ACK를 반환합니다.
+- 성공 ACK는 테스트용 handler round-trip에서 검증됐습니다. 실제
+  decode→normalize→DB save 이후 성공 ACK 연결은 S5-06에서 수행합니다.
 
 ### 11.4 CLI 입력
 
