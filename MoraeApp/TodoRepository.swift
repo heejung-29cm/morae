@@ -5,6 +5,10 @@ import MoraeCore
 protocol TodoRepository: Sendable {
     func list(day: LocalDay) async throws -> [TodoItem]
     func listCompleted(day: LocalDay) async throws -> [TodoItem]
+    func listCarryOverCandidates(
+        from: LocalDay,
+        to: LocalDay
+    ) async throws -> [TodoItem]
     func insert(_ item: TodoItem) async throws
     func update(_ item: TodoItem) async throws
     func setCompletion(id: TodoID, isCompleted: Bool, at: Date) async throws -> TodoItem
@@ -69,6 +73,10 @@ struct TodoRecord: Codable, FetchableRecord, PersistableRecord, TableRecord, Sen
     }
 
     init(item: TodoItem) {
+        self.init(item: item, source: "manual")
+    }
+
+    init(item: TodoItem, source: String) {
         id = item.id.storageValue
         title = item.title
         taskDay = item.day.rawValue
@@ -78,7 +86,7 @@ struct TodoRecord: Codable, FetchableRecord, PersistableRecord, TableRecord, Sen
         estimatedMinutes = item.estimatedMinutes
         relatedURL = item.relatedURL?.absoluteString
         projectPath = item.projectPath
-        source = "manual"
+        self.source = source
         completedAtMs = item.completedAt?.unixMilliseconds
         createdAtMs = item.createdAt.unixMilliseconds
         updatedAtMs = item.updatedAt.unixMilliseconds
@@ -199,6 +207,35 @@ final class GRDBTodoRepository: @unchecked Sendable {
         }
     }
 
+    func listCarryOverCandidates(
+        from: LocalDay,
+        to: LocalDay
+    ) async throws -> [TodoItem] {
+        try await writer.read { database in
+            try TodoRecord.fetchAll(
+                database,
+                sql: """
+                    SELECT source_task.*
+                    FROM tasks AS source_task
+                    WHERE source_task.task_day = ?
+                      AND source_task.status = 'pending'
+                      AND NOT EXISTS (
+                          SELECT 1
+                          FROM tasks AS carried
+                          WHERE carried.task_day = ?
+                            AND carried.source = 'carryover:' || source_task.id
+                      )
+                    ORDER BY
+                        source_task.sort_order ASC,
+                        source_task.created_at_ms ASC,
+                        source_task.id ASC
+                    """,
+                arguments: [from.rawValue, to.rawValue]
+            )
+            .map { try $0.domain() }
+        }
+    }
+
     func insert(_ item: TodoItem) async throws {
         try await writer.write { database in
             try TodoRecord(item: item).insert(database)
@@ -311,6 +348,17 @@ final class GRDBTodoRepository: @unchecked Sendable {
             guard requestedStorageIDs.allSatisfy({ recordsByID[$0] != nil }) else {
                 throw TodoRepositoryError.reorderMismatch
             }
+            let existingCarrySources = Set(
+                try String.fetchAll(
+                    database,
+                    sql: """
+                        SELECT source
+                        FROM tasks
+                        WHERE task_day = ? AND source LIKE 'carryover:%'
+                        """,
+                    arguments: [to.rawValue]
+                )
+            )
 
             let nextSortOrder = (
                 try Int.fetchOne(
@@ -321,6 +369,12 @@ final class GRDBTodoRepository: @unchecked Sendable {
             ) + 1
 
             return try zip(requestedStorageIDs, newIDs)
+                .filter { pair in
+                    let (sourceID, _) = pair
+                    return !existingCarrySources.contains(
+                        "carryover:\(sourceID)"
+                    )
+                }
                 .enumerated()
                 .map { offset, pair in
                     let (sourceID, newID) = pair
@@ -338,7 +392,11 @@ final class GRDBTodoRepository: @unchecked Sendable {
                         createdAt: date,
                         updatedAt: date
                     )
-                    try TodoRecord(item: copy).insert(database)
+                    try TodoRecord(
+                        item: copy,
+                        source: "carryover:\(sourceID)"
+                    )
+                    .insert(database)
                     return copy
                 }
         }

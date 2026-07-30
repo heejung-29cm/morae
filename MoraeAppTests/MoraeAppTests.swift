@@ -90,7 +90,7 @@ final class MoraeAppTests: XCTestCase {
         )
     }
 
-    func testInMemoryV1MigrationCreatesEntireSchema() throws {
+    func testInMemoryMigrationsCreateEntireSchema() throws {
         let database = try AppDatabase.inMemory()
 
         let objects = try database.read { db in
@@ -113,6 +113,7 @@ final class MoraeAppTests: XCTestCase {
             "agent_runs",
             "agent_events",
             "idx_tasks_day_status_order",
+            "idx_tasks_carry_target_source",
             "idx_articles_published",
             "idx_briefing_runs_day_triggered",
             "idx_agent_runs_recent",
@@ -127,7 +128,7 @@ final class MoraeAppTests: XCTestCase {
                 sql: "SELECT identifier FROM grdb_migrations"
             )
         }
-        XCTAssertEqual(migrations, ["v1_initial"])
+        XCTAssertEqual(migrations, ["v1_initial", "v2_unique_carry_over"])
     }
 
     func testDatabaseEnablesForeignKeysAndBusyTimeout() throws {

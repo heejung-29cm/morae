@@ -49,13 +49,18 @@ final class MenuBarViewModel {
         do {
             async let todayRequest = repository.list(day: today)
             async let yesterdayRequest = repository.list(day: yesterday)
-            let (todayItems, yesterdayItems) = try await (
+            async let carryOverRequest = repository.listCarryOverCandidates(
+                from: yesterday,
+                to: today
+            )
+            let (todayItems, yesterdayItems, carryOverItems) = try await (
                 todayRequest,
-                yesterdayRequest
+                yesterdayRequest,
+                carryOverRequest
             )
             todayTodos = todayItems
             yesterdayCompleted = yesterdayItems.filter { $0.status == .completed }
-            yesterdayPending = yesterdayItems.filter { $0.status == .pending }
+            yesterdayPending = carryOverItems
         } catch {
             errorMessage = "할 일 요약을 불러오지 못했습니다."
         }
@@ -253,6 +258,7 @@ final class MenuBarViewModel {
 
     func carryOverSelected() async {
         guard let repository, !selectedCarryOverIDs.isEmpty else { return }
+        let carriedSourceIDs = selectedCarryOverIDs
         do {
             _ = try await CarryOverPendingTodos(
                 repository: repository,
@@ -267,6 +273,9 @@ final class MenuBarViewModel {
                     .map(\.id)
             )
             selectedCarryOverIDs = []
+            yesterdayPending.removeAll {
+                carriedSourceIDs.contains($0.id)
+            }
         } catch {
             errorMessage = "어제 할 일을 가져오지 못했습니다."
         }

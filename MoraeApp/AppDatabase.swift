@@ -57,6 +57,13 @@ final class AppDatabase: @unchecked Sendable {
         migrator.registerMigration("v1_initial") { database in
             try database.execute(sql: SchemaV1.sql)
         }
+        migrator.registerMigration("v2_unique_carry_over") { database in
+            try database.execute(sql: """
+                CREATE UNIQUE INDEX idx_tasks_carry_target_source
+                ON tasks(task_day, source)
+                WHERE source LIKE 'carryover:%'
+                """)
+        }
         return migrator
     }
 }

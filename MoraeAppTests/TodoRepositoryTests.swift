@@ -247,10 +247,21 @@ final class TodoRepositoryTests: XCTestCase {
         XCTAssertEqual(copies.first?.day, today)
         XCTAssertEqual(copies.first?.status, .pending)
         XCTAssertNil(copies.first?.completedAt)
+        let repeatedCopies = try await useCase.execute(
+            from: yesterday,
+            to: today,
+            selectedIDs: [selected.id]
+        )
+        XCTAssertTrue(repeatedCopies.isEmpty)
         let originals = try await repository.list(day: yesterday)
         let todayItems = try await repository.list(day: today)
+        let remainingCandidates = try await repository.listCarryOverCandidates(
+            from: yesterday,
+            to: today
+        )
         XCTAssertEqual(originals.count, 3)
         XCTAssertEqual(todayItems, copies)
+        XCTAssertEqual(remainingCandidates.map(\.id), [unselected.id])
     }
 
     func testLocalSummaryUsesCalendarAndPrioritizesImportantTodos() async throws {
@@ -413,6 +424,7 @@ final class TodoRepositoryTests: XCTestCase {
         let carried = try await repository.list(day: viewModel.today)
         XCTAssertTrue(carried.contains(where: { $0.id.rawValue == newUUID }))
         XCTAssertTrue(viewModel.selectedCarryOverIDs.isEmpty)
+        XCTAssertTrue(viewModel.yesterdayPending.isEmpty)
         let originals = try await repository.list(day: viewModel.yesterday)
         XCTAssertEqual(originals.map(\.id), [yesterdayPending.id])
     }
@@ -558,6 +570,13 @@ private final class CountingTodoRepository: TodoRepository, @unchecked Sendable 
 
     func listCompleted(day: LocalDay) async throws -> [TodoItem] {
         try await base.listCompleted(day: day)
+    }
+
+    func listCarryOverCandidates(
+        from: LocalDay,
+        to: LocalDay
+    ) async throws -> [TodoItem] {
+        try await base.listCarryOverCandidates(from: from, to: to)
     }
 
     func insert(_ item: TodoItem) async throws {

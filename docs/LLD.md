@@ -300,6 +300,10 @@ CREATE TABLE tasks (
 CREATE INDEX idx_tasks_day_status_order
 ON tasks(task_day, status, sort_order);
 
+CREATE UNIQUE INDEX idx_tasks_carry_target_source
+ON tasks(task_day, source)
+WHERE source LIKE 'carryover:%';
+
 CREATE TABLE feed_sources (
     id                  TEXT PRIMARY KEY NOT NULL,
     name                TEXT NOT NULL,
@@ -438,6 +442,10 @@ WHERE received_at_ms < :cutoff_ms;
 protocol TodoRepository: Sendable {
     func list(day: LocalDay) async throws -> [TodoItem]
     func listCompleted(day: LocalDay) async throws -> [TodoItem]
+    func listCarryOverCandidates(
+        from: LocalDay,
+        to: LocalDay
+    ) async throws -> [TodoItem]
     func insert(_ item: TodoItem) async throws
     func update(_ item: TodoItem) async throws
     func delete(id: TodoID) async throws
@@ -447,6 +455,10 @@ protocol TodoRepository: Sendable {
 ```
 
 `reorder`는 해당 날짜의 모든 ID가 정확히 한 번 포함되었는지 검증하고 단일 트랜잭션으로 `sort_order`를 0부터 재지정합니다.
+
+이월 복사본의 `source`는 `carryover:<원본 task id>` 형식으로 저장합니다.
+후보 조회에서는 오늘 이미 복사된 원본을 제외하고, 부분 unique index로 같은
+날짜에 동일한 원본이 두 번 복사되지 않도록 보장합니다.
 
 ### 8.2 Article과 Briefing
 
