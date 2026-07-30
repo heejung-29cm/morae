@@ -58,3 +58,40 @@ public struct FeedCandidate: Hashable, Sendable {
         self.isOfficialSource = isOfficialSource
     }
 }
+
+public struct Article: Identifiable, Equatable, Sendable {
+    public let id: ArticleID
+    public let canonicalURL: URL
+    public let title: String
+    public let sourceName: String
+    public let sourceURL: URL?
+    public let publishedAt: Date?
+    public var isRead: Bool
+    public var isLiked: Bool
+    public let createdAt: Date
+    public var updatedAt: Date
+
+    public init(
+        id: ArticleID,
+        canonicalURL: URL,
+        title: String,
+        sourceName: String,
+        sourceURL: URL?,
+        publishedAt: Date?,
+        isRead: Bool,
+        isLiked: Bool,
+        createdAt: Date,
+        updatedAt: Date
+    ) {
+        self.id = id
+        self.canonicalURL = canonicalURL
+        self.title = title
+        self.sourceName = sourceName
+        self.sourceURL = sourceURL
+        self.publishedAt = publishedAt
+        self.isRead = isRead
+        self.isLiked = isLiked
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+}

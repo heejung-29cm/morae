@@ -23,6 +23,7 @@ final class AppContainer {
     let database: AppDatabase?
     let todoRepository: (any TodoRepository)?
     let feedSourceRepository: (any FeedSourceRepository)?
+    let articleRepository: (any ArticleRepository)?
     let startupError: AppError?
 
     init(
@@ -32,6 +33,7 @@ final class AppContainer {
         database: AppDatabase? = nil,
         todoRepository: (any TodoRepository)? = nil,
         feedSourceRepository: (any FeedSourceRepository)? = nil,
+        articleRepository: (any ArticleRepository)? = nil,
         startupError: AppError? = nil
     ) {
         self.clock = clock
@@ -40,6 +42,7 @@ final class AppContainer {
         self.database = database
         self.todoRepository = todoRepository
         self.feedSourceRepository = feedSourceRepository
+        self.articleRepository = articleRepository
         self.startupError = startupError
     }
 
@@ -56,7 +59,11 @@ final class AppContainer {
                 menuBarContentLoader: EmptyMenuBarContentLoader(),
                 database: database,
                 todoRepository: GRDBTodoRepository(database: database),
-                feedSourceRepository: feedSourceRepository
+                feedSourceRepository: feedSourceRepository,
+                articleRepository: GRDBArticleRepository(
+                    database: database,
+                    clock: SystemClock()
+                )
             )
         } catch {
             let startupError = AppError(
