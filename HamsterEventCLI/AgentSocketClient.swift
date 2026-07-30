@@ -81,6 +81,11 @@ protocol AgentFrameSending {
 struct AgentSocketClient: AgentFrameSending {
     static let totalTimeout: TimeInterval = 0.9
     private static let connectTimeoutMilliseconds: Int32 = 250
+    private let maximumWriteChunkByteCount: Int
+
+    init(maximumWriteChunkByteCount: Int = .max) {
+        self.maximumWriteChunkByteCount = maximumWriteChunkByteCount
+    }
 
     func send(
         frame: Data,
@@ -185,8 +190,12 @@ struct AgentSocketClient: AgentFrameSending {
             }
             throw AgentSocketClientError.connectionFailed
         }
-        let errorEvents = Int16(POLLERR | POLLHUP | POLLNVAL)
-        guard descriptor.revents & errorEvents == 0
+        let fatalEvents = Int16(POLLERR | POLLNVAL)
+        let hasRequestedEvent = descriptor.revents & event != 0
+        guard descriptor.revents & fatalEvents == 0,
+              hasRequestedEvent
+                || (event == Int16(POLLIN)
+                    && descriptor.revents & Int16(POLLHUP) != 0)
         else {
             throw AgentSocketClientError.connectionFailed
         }
@@ -209,7 +218,10 @@ struct AgentSocketClient: AgentFrameSending {
                 let count = Darwin.write(
                     fileDescriptor,
                     baseAddress.advanced(by: offset),
-                    data.count - offset
+                    min(
+                        data.count - offset,
+                        maximumWriteChunkByteCount
+                    )
                 )
                 if count > 0 {
                     offset += count

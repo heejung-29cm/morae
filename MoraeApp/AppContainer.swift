@@ -26,6 +26,7 @@ final class AppContainer {
     let articleRepository: (any ArticleRepository)?
     let briefingRepository: (any BriefingRepository)?
     let generateBriefing: (any BriefingGenerating)?
+    let agentSocketServer: AgentSocketServer?
     let startupError: AppError?
 
     init(
@@ -38,6 +39,7 @@ final class AppContainer {
         articleRepository: (any ArticleRepository)? = nil,
         briefingRepository: (any BriefingRepository)? = nil,
         generateBriefing: (any BriefingGenerating)? = nil,
+        agentSocketServer: AgentSocketServer? = nil,
         startupError: AppError? = nil
     ) {
         self.clock = clock
@@ -49,6 +51,7 @@ final class AppContainer {
         self.articleRepository = articleRepository
         self.briefingRepository = briefingRepository
         self.generateBriefing = generateBriefing
+        self.agentSocketServer = agentSocketServer
         self.startupError = startupError
     }
 
@@ -71,6 +74,19 @@ final class AppContainer {
             let now = clock.now()
             let defaultFeeds = try DefaultFeedLoader.load(at: now)
             try feedSourceRepository.seedDefaultsSynchronously(defaultFeeds)
+            let agentSocketServer = AgentSocketServer(
+                endpointURL: AgentSocketEndpoint.defaultURL()
+            )
+            let runningAgentSocketServer: AgentSocketServer?
+            do {
+                try agentSocketServer.start()
+                runningAgentSocketServer = agentSocketServer
+            } catch {
+                MoraeLogger(category: .agentIPC).error(
+                    event: PublicLogToken("socket_start_failed")
+                )
+                runningAgentSocketServer = nil
+            }
             return AppContainer(
                 clock: clock,
                 uuidGenerator: uuidGenerator,
@@ -89,7 +105,8 @@ final class AppContainer {
                     preferences: UserDefaultsBriefingPreferences(),
                     clock: clock,
                     uuidGenerator: uuidGenerator
-                )
+                ),
+                agentSocketServer: runningAgentSocketServer
             )
         } catch {
             let startupError = AppError(

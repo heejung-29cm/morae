@@ -15,6 +15,38 @@ final class AgentSocketServerTests: XCTestCase {
         }
     }
 
+    func testRealClientServerRoundTripWithPartialWrites() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let endpoint = directory.appendingPathComponent("event.sock")
+        let eventID = UUID()
+        let server = AgentSocketServer(
+            endpointURL: endpoint,
+            handler: StubHandler(ack: .success(eventID: eventID))
+        )
+        defer {
+            server.stop()
+            try? FileManager.default.removeItem(at: directory)
+        }
+        try server.start()
+        let envelope = AgentTransportEnvelope(
+            source: .claude,
+            eventHint: "TaskCompleted",
+            receivedAtMs: 123,
+            rawPayload: Data(#"{"session_id":"session"}"#.utf8)
+        )
+
+        let ack = try AgentSocketClient(
+            maximumWriteChunkByteCount: 3
+        ).send(
+            frame: AgentFrameCodec.encode(envelope),
+            to: endpoint,
+            deadline: AgentDeadline(duration: 0.9)
+        )
+
+        XCTAssertEqual(ack, .success(eventID: eventID))
+    }
+
     func testConnectionWritesSuccessOnlyAfterHandlerReturns() throws {
         let descriptors = try socketPair()
         defer {
