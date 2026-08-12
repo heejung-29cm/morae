@@ -468,11 +468,9 @@ struct MenuBarRootView: View {
                 }
             }
 
-            if let body = report.body, !body.isEmpty {
-                Text(body)
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(MoraeColor.secondaryForeground)
-                    .fixedSize(horizontal: false, vertical: true)
+            let lines = report.bodyLines
+            if !lines.isEmpty {
+                reportBody(lines)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -482,6 +480,46 @@ struct MenuBarRootView: View {
             in: RoundedRectangle(cornerRadius: MoraeRadius.medium)
         )
         .accessibilityElement(children: .combine)
+    }
+
+    /// 관찰 항목과 액션(🎯)을 분리해 그린다. 마커를 별도 Text 로 두면 두 번째 줄부터
+    /// 마커 아래로 말려들지 않고 본문 기준으로 정렬된다(매달린 들여쓰기).
+    private func reportBody(_ lines: [AIReportBodyLine]) -> some View {
+        let observations = lines.filter { !$0.isAction }
+        let actions = lines.filter(\.isAction)
+
+        return VStack(alignment: .leading, spacing: MoraeSpacing.compact) {
+            ForEach(Array(observations.enumerated()), id: \.offset) { _, line in
+                reportBodyRow("•", line.text, weight: .regular)
+            }
+
+            if !actions.isEmpty {
+                Divider()
+                    .overlay(MoraeColor.separator)
+                    .padding(.vertical, MoraeSpacing.xSmall)
+
+                ForEach(Array(actions.enumerated()), id: \.offset) { _, line in
+                    reportBodyRow("🎯", line.text, weight: .medium)
+                }
+            }
+        }
+    }
+
+    private func reportBodyRow(
+        _ marker: String,
+        _ text: String,
+        weight: Font.Weight
+    ) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: MoraeSpacing.compact) {
+            Text(marker)
+                .font(.system(size: 11.5))
+                .foregroundStyle(MoraeColor.mutedForeground)
+            Text(text)
+                .font(.system(size: 11.5, weight: weight))
+                .foregroundStyle(MoraeColor.secondaryForeground)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
 
     @ViewBuilder

@@ -64,6 +64,41 @@ enum AIReportErrorCode: String, Sendable, Equatable {
 
 /// 하루치 AI 활용 리포트. 본문은 스크립트가 생성한 사람이 읽는 텍스트이고,
 /// 숫자 필드는 한눈에 보여 주기 위해 별도로 저장한다.
+/// 리포트 본문 한 줄. 마커(•, 🎯)는 렌더러가 그리므로 텍스트에서 떼어 둔다.
+struct AIReportBodyLine: Equatable, Sendable {
+    let text: String
+    /// 🎯 로 시작하던 줄 — 그날 시도할 행동. 나머지와 구분해 그린다.
+    let isAction: Bool
+}
+
+extension AIReport {
+    /// 본문을 줄 단위로 쪼개고 선행 마커를 떼어낸다.
+    ///
+    /// 생성 스크립트가 "• " / "🎯 " 를 문자열에 직접 박아 보내므로, 렌더러가 매달린 들여쓰기로
+    /// 그리려면 마커와 본문을 분리해야 한다. 빈 줄과 마커만 있는 줄은 버린다.
+    var bodyLines: [AIReportBodyLine] {
+        guard let body, !body.isEmpty else { return [] }
+
+        return body.split(whereSeparator: \.isNewline).compactMap { rawLine in
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+            guard !line.isEmpty else { return nil }
+
+            let isAction = line.hasPrefix("🎯")
+            let text = Self.strippingLeadingMarker(line)
+            guard !text.isEmpty else { return nil }
+
+            return AIReportBodyLine(text: text, isAction: isAction)
+        }
+    }
+
+    private static func strippingLeadingMarker(_ line: String) -> String {
+        for marker in ["🎯", "•", "-", "*"] where line.hasPrefix(marker) {
+            return String(line.dropFirst(marker.count)).trimmingCharacters(in: .whitespaces)
+        }
+        return line
+    }
+}
+
 struct AIReport: Equatable, Sendable {
     let id: AIReportID
     let day: LocalDay

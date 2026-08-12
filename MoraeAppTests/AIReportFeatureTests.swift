@@ -225,4 +225,52 @@ final class GenerateAIReportTests: XCTestCase {
         XCTAssertEqual(latest?.status, .failed)
         XCTAssertEqual(latest?.errorCode, .scriptMissing)
     }
+
+    // MARK: - bodyLines
+
+    private func makeReport(body: String?) throws -> AIReport {
+        AIReport(
+            id: AIReportID(rawValue: UUID()),
+            day: try LocalDay(rawValue: "2026-08-11"),
+            status: .succeeded,
+            headline: "테스트",
+            body: body,
+            tokenCount: nil,
+            tokenPercentile: nil,
+            costUSD: nil,
+            triggeredAt: Date(),
+            finishedAt: nil,
+            errorCode: nil
+        )
+    }
+
+    func testBodyLinesStripsMarkersAndFlagsAction() throws {
+        let report = try makeReport(body: "• 프롬프트 17개 중 파일 경로 0개\n• 계획 도구 0번\n🎯 파일 경로 하나 붙이기")
+
+        let lines = report.bodyLines
+
+        XCTAssertEqual(lines.count, 3)
+        XCTAssertEqual(lines[0].text, "프롬프트 17개 중 파일 경로 0개")
+        XCTAssertFalse(lines[0].isAction)
+        XCTAssertEqual(lines[2].text, "파일 경로 하나 붙이기")
+        XCTAssertTrue(lines[2].isAction)
+    }
+
+    func testBodyLinesDropsEmptyAndMarkerOnlyLines() throws {
+        let report = try makeReport(body: "• 첫 줄\n\n   \n•\n• 둘째 줄")
+
+        XCTAssertEqual(report.bodyLines.map(\.text), ["첫 줄", "둘째 줄"])
+    }
+
+    func testBodyLinesHandlesMissingOrEmptyBody() throws {
+        XCTAssertTrue(try makeReport(body: nil).bodyLines.isEmpty)
+        XCTAssertTrue(try makeReport(body: "").bodyLines.isEmpty)
+    }
+
+    func testBodyLinesKeepsTextWithoutMarker() throws {
+        let report = try makeReport(body: "마커 없는 줄\n- 하이픈 줄")
+
+        XCTAssertEqual(report.bodyLines.map(\.text), ["마커 없는 줄", "하이픈 줄"])
+    }
+
 }
