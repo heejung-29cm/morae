@@ -1,5 +1,6 @@
 .DS_Store
 DerivedData/
+build/
 .build/
 .swiftpm/
 **/xcuserdata/
@@ -16,3 +17,4 @@ DerivedData/
 *.mobileprovision
 *.provisionprofile
 .artifacts/
+*.dmg
