@@ -419,6 +419,21 @@ protocol AgentNotifying: Sendable {
     func requestAuthorization() async -> Bool
 }
 
+actor FreshTestAgentNotifier: AgentNotifying {
+    private var state: AgentNotificationAuthorizationState = .notDetermined
+
+    func notify(for run: AgentRun) async {}
+
+    func authorizationState() async -> AgentNotificationAuthorizationState {
+        state
+    }
+
+    func requestAuthorization() async -> Bool {
+        state = .authorized
+        return true
+    }
+}
+
 struct SystemAgentNotifier: AgentNotifying {
     let privacy: any AgentPrivacyPolicyProviding
 
@@ -644,6 +659,10 @@ final class AgentActivityModel {
     @ObservationIgnored
     nonisolated(unsafe) private var observationTask: Task<Void, Never>?
     private var isVisible = false
+
+    var shouldAnimateMenuBarIcon: Bool {
+        hasUnread || runs.contains { $0.status == .running }
+    }
 
     init(repository: any AgentRepository) {
         self.repository = repository

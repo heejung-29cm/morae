@@ -83,6 +83,90 @@ final class AppDatabase: @unchecked Sendable {
                     CHECK(selection_weight BETWEEN 0 AND 100)
                 """)
         }
+        migrator.registerMigration("v5_jira_task_origin") { database in
+            try database.execute(sql: """
+                ALTER TABLE tasks ADD COLUMN external_provider TEXT;
+                ALTER TABLE tasks ADD COLUMN external_id TEXT;
+                ALTER TABLE tasks ADD COLUMN external_key TEXT;
+                ALTER TABLE tasks ADD COLUMN external_status_category TEXT;
+                ALTER TABLE tasks ADD COLUMN external_status_name TEXT;
+                ALTER TABLE tasks ADD COLUMN external_start_day TEXT;
+                ALTER TABLE tasks ADD COLUMN external_due_day TEXT;
+                ALTER TABLE tasks ADD COLUMN external_synced_at_ms INTEGER;
+
+                CREATE UNIQUE INDEX idx_tasks_external_daily
+                ON tasks(task_day, external_provider, external_id)
+                WHERE external_provider IS NOT NULL
+                  AND external_id IS NOT NULL;
+
+                CREATE INDEX idx_tasks_external_provider
+                ON tasks(external_provider, external_id);
+                """)
+        }
+        migrator.registerMigration("v6_jira_daily_dismissal") { database in
+            try database.execute(sql: """
+                CREATE TABLE jira_task_dismissals (
+                    task_day       TEXT NOT NULL CHECK(length(task_day) = 10),
+                    issue_id       TEXT NOT NULL,
+                    PRIMARY KEY(task_day, issue_id)
+                ) WITHOUT ROWID;
+                """)
+        }
+        migrator.registerMigration("v7_article_feedback") { database in
+            try database.execute(sql: """
+                ALTER TABLE articles
+                ADD COLUMN feedback TEXT NOT NULL DEFAULT 'neutral'
+                    CHECK(feedback IN (
+                        'neutral', 'not_interested', 'more_like_this'
+                    ));
+                ALTER TABLE articles
+                ADD COLUMN topic TEXT NOT NULL DEFAULT 'other'
+                    CHECK(topic IN (
+                        'other', 'infrastructure_and_data',
+                        'collaboration', 'ai_and_frontend'
+                    ));
+
+                CREATE INDEX idx_articles_feedback
+                ON articles(feedback, updated_at_ms DESC);
+                """)
+        }
+        migrator.registerMigration("v8_ai_reports") { database in
+            try database.execute(sql: """
+                CREATE TABLE ai_reports (
+                    id                  TEXT PRIMARY KEY NOT NULL,
+                    report_day          TEXT NOT NULL UNIQUE
+                                            CHECK(length(report_day) = 10),
+                    status              TEXT NOT NULL CHECK(status IN (
+                        'running', 'succeeded', 'failed'
+                    )),
+                    headline            TEXT,
+                    body                TEXT,
+                    token_count         INTEGER,
+                    token_percentile    INTEGER
+                                            CHECK(token_percentile IS NULL
+                                                OR token_percentile BETWEEN 0 AND 100),
+                    cost_usd            REAL,
+                    triggered_at_ms     INTEGER NOT NULL,
+                    finished_at_ms      INTEGER,
+                    error_code          TEXT,
+                    CHECK (
+                        (status = 'succeeded'
+                            AND headline IS NOT NULL
+                            AND body IS NOT NULL
+                            AND finished_at_ms IS NOT NULL)
+                        OR (status = 'failed'
+                            AND error_code IS NOT NULL
+                            AND finished_at_ms IS NOT NULL)
+                        OR (status = 'running'
+                            AND finished_at_ms IS NULL
+                            AND error_code IS NULL)
+                    )
+                );
+
+                CREATE INDEX idx_ai_reports_day
+                ON ai_reports(report_day DESC);
+                """)
+        }
         return migrator
     }
 }

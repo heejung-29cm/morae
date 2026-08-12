@@ -14,6 +14,7 @@ struct TodoRowView: View {
     let onMoveDown: () -> Void
     let onEdit: () -> Void
     let onDelete: () -> Void
+    let onOpenRelatedURL: () -> Void
 
     @State private var isHovered = false
 
@@ -51,8 +52,13 @@ struct TodoRowView: View {
             if item.status == .pending, canMoveDown {
                 Button("아래로 이동", action: onMoveDown)
             }
-            Button("편집", action: onEdit)
-            Button("삭제", action: onDelete)
+            if item.origin.isJira {
+                Button("Jira에서 열기", action: onOpenRelatedURL)
+                Button("삭제", action: onDelete)
+            } else {
+                Button("편집", action: onEdit)
+                Button("삭제", action: onDelete)
+            }
         }
         .contextMenu {
             if item.status == .pending {
@@ -62,7 +68,15 @@ struct TodoRowView: View {
                     .disabled(!canMoveDown)
                 Divider()
             }
-            Button("편집", systemImage: "pencil", action: onEdit)
+            if item.origin.isJira {
+                Button(
+                    "Jira에서 열기",
+                    systemImage: "arrow.up.right",
+                    action: onOpenRelatedURL
+                )
+            } else {
+                Button("편집", systemImage: "pencil", action: onEdit)
+            }
             Button(
                 "삭제",
                 systemImage: "trash",
@@ -131,7 +145,29 @@ struct TodoRowView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .layoutPriority(1)
             }
-            if let minutes = item.estimatedMinutes {
+            if case let .jira(metadata) = item.origin {
+                HStack(spacing: 4) {
+                    Text("Jira")
+                        .font(.system(size: 9.5, weight: .semibold))
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1.5)
+                        .foregroundStyle(MoraeColor.accent)
+                        .background(
+                            MoraeColor.selectedFill,
+                            in: Capsule()
+                        )
+                    Text(metadata.issueKey)
+                    Text("·")
+                    Text(metadata.statusName)
+                    if let overdueLabel = overdueLabel(metadata: metadata) {
+                        Text("·")
+                        Text(overdueLabel)
+                            .foregroundStyle(.orange)
+                    }
+                }
+                .font(.caption2)
+                .foregroundStyle(MoraeColor.secondaryForeground)
+            } else if let minutes = item.estimatedMinutes {
                 Label("\(minutes)분", systemImage: "clock")
                     .font(.caption2)
                     .foregroundStyle(MoraeColor.secondaryForeground)
@@ -142,11 +178,19 @@ struct TodoRowView: View {
 
     private var actionButtons: some View {
         HStack(spacing: 1) {
-            TodoRowActionButton(
-                systemImage: "pencil",
-                accessibilityLabel: "\(item.title) 편집",
-                action: onEdit
-            )
+            if item.origin.isJira {
+                TodoRowActionButton(
+                    systemImage: "arrow.up.right",
+                    accessibilityLabel: "\(item.title) Jira에서 열기",
+                    action: onOpenRelatedURL
+                )
+            } else {
+                TodoRowActionButton(
+                    systemImage: "pencil",
+                    accessibilityLabel: "\(item.title) 편집",
+                    action: onEdit
+                )
+            }
             TodoRowActionButton(
                 systemImage: "trash",
                 accessibilityLabel: "\(item.title) 삭제",
@@ -155,6 +199,38 @@ struct TodoRowView: View {
             )
         }
         .opacity(isHovered ? 1 : 0.60)
+    }
+
+    private func overdueLabel(metadata: JiraTodoMetadata) -> String? {
+        guard let dueDay = metadata.dueDay,
+              dueDay < item.day,
+              let dueDate = Self.date(from: dueDay),
+              let taskDate = Self.date(from: item.day) else {
+            return nil
+        }
+        let days = Calendar(identifier: .gregorian).dateComponents(
+            [.day],
+            from: dueDate,
+            to: taskDate
+        ).day ?? 0
+        return days > 0 ? "D+\(days)" : nil
+    }
+
+    private static func date(from day: LocalDay) -> Date? {
+        let values = day.rawValue.split(separator: "-").compactMap {
+            Int($0)
+        }
+        guard values.count == 3 else { return nil }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        return calendar.date(
+            from: DateComponents(
+                year: values[0],
+                month: values[1],
+                day: values[2],
+                hour: 12
+            )
+        )
     }
 }
 

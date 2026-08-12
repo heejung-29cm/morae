@@ -3,12 +3,14 @@ import SwiftUI
 
 enum MenuBarSection: String, CaseIterable, Sendable {
     case article
+    case aiReport
     case yesterdayCompleted
     case todayTodos
     case recentAgents
 
     static let orderedCases: [MenuBarSection] = [
         .article,
+        .aiReport,
         .yesterdayCompleted,
         .todayTodos,
         .recentAgents,
@@ -17,6 +19,7 @@ enum MenuBarSection: String, CaseIterable, Sendable {
     var title: String {
         switch self {
         case .article: "오늘의 아티클"
+        case .aiReport: "어제의 AI 리포트"
         case .yesterdayCompleted: "어제 완료"
         case .todayTodos: "오늘 할 일"
         case .recentAgents: "최근 에이전트 기록"
@@ -26,6 +29,7 @@ enum MenuBarSection: String, CaseIterable, Sendable {
     var emptyMessage: String {
         switch self {
         case .article: "아직 추천한 아티클이 없습니다."
+        case .aiReport: "아직 받은 리포트가 없습니다."
         case .yesterdayCompleted: "어제 완료한 일이 없습니다."
         case .todayTodos: "오늘 할 일이 없습니다."
         case .recentAgents: "수신한 에이전트 기록이 없습니다."
@@ -35,6 +39,7 @@ enum MenuBarSection: String, CaseIterable, Sendable {
     var systemImage: String {
         switch self {
         case .article: "newspaper"
+        case .aiReport: "chart.bar.doc.horizontal"
         case .yesterdayCompleted: "checkmark.circle"
         case .todayTodos: "list.bullet"
         case .recentAgents: "terminal"
@@ -65,15 +70,82 @@ private struct TodoRowFramePreferenceKey: PreferenceKey {
     }
 }
 
-private struct AgentRunGroup: Identifiable {
+struct AgentRunGroup: Identifiable, Equatable {
     let id: String
     let title: String
     let runs: [AgentRun]
 }
 
+enum AgentRunGrouping {
+    static let groupLimit = 2
+    static let runsPerGroup = 2
+
+    static func recentGroups(from runs: [AgentRun]) -> [AgentRunGroup] {
+        let sortedRuns = runs.sorted {
+            if $0.updatedAt != $1.updatedAt {
+                return $0.updatedAt > $1.updatedAt
+            }
+            return $0.id.storageValue > $1.id.storageValue
+        }
+
+        var groupOrder: [String] = []
+        var groupTitles: [String: String] = [:]
+        var groupedRuns: [String: [AgentRun]] = [:]
+
+        for run in sortedRuns {
+            let identity = groupIdentity(for: run)
+            if groupedRuns[identity.id] == nil {
+                guard groupOrder.count < groupLimit else { continue }
+                groupOrder.append(identity.id)
+                groupTitles[identity.id] = identity.title
+            }
+            guard groupedRuns[identity.id, default: []].count
+                    < runsPerGroup
+            else {
+                continue
+            }
+            groupedRuns[identity.id, default: []].append(run)
+        }
+
+        return groupOrder.map {
+            AgentRunGroup(
+                id: $0,
+                title: groupTitles[$0] ?? $0,
+                runs: groupedRuns[$0] ?? []
+            )
+        }
+    }
+
+    private static func groupIdentity(
+        for run: AgentRun
+    ) -> (id: String, title: String) {
+        guard let rawPath = run.projectPath?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+            !rawPath.isEmpty
+        else {
+            let source = sourceName(run.source)
+            return ("source:\(run.source.rawValue)", source)
+        }
+
+        let path = URL(fileURLWithPath: rawPath)
+            .standardizedFileURL
+            .path
+        let components = URL(fileURLWithPath: path)
+            .pathComponents
+            .filter { $0 != "/" }
+        let title = components.suffix(2).joined(separator: "/")
+        return ("path:\(path)", title.isEmpty ? rawPath : title)
+    }
+
+    private static func sourceName(_ source: AgentSource) -> String {
+        source == .codex ? "Codex" : "Claude"
+    }
+}
+
 @MainActor
 struct MenuBarRootView: View {
     let container: AppContainer
+    let openSettings: () -> Void
     @Environment(\.openURL) private var openURL
     @State private var viewModel: MenuBarViewModel
     @State private var quickAddTitle = ""
@@ -83,15 +155,23 @@ struct MenuBarRootView: View {
     @State private var todoRowFrames: [TodoID: CGRect] = [:]
     @FocusState private var isQuickAddFocused: Bool
 
-    init(container: AppContainer) {
+    init(
+        container: AppContainer,
+        openSettings: @escaping () -> Void
+    ) {
         self.container = container
+        self.openSettings = openSettings
         _viewModel = State(
             initialValue: MenuBarViewModel(
                 repository: container.todoRepository,
                 briefingRepository: container.briefingRepository,
                 briefingGenerator: container.generateBriefing,
+                aiReportRepository: container.aiReportRepository,
+                aiReportGenerator: container.generateAIReport,
+                articleRepository: container.articleRepository,
                 clock: container.clock,
-                uuidGenerator: container.uuidGenerator
+                uuidGenerator: container.uuidGenerator,
+                jiraIntegration: container.jiraIntegration
             )
         )
     }
@@ -108,6 +188,7 @@ struct MenuBarRootView: View {
                         startupErrorView(startupError)
                     } else {
                         articleSection
+                        aiReportSection
                         yesterdaySection
                         todaySection
                         agentSection
@@ -129,6 +210,27 @@ struct MenuBarRootView: View {
                     .refreshNotificationAuthorization(notifier: notifier)
             }
         }
+        .onReceive(
+            NotificationCenter.default.publisher(for: .NSCalendarDayChanged)
+        ) { _ in
+            Task {
+                await viewModel.refreshDayIfNeeded()
+            }
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(for: .NSSystemClockDidChange)
+        ) { _ in
+            Task {
+                await viewModel.refreshDayIfNeeded()
+            }
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(for: .NSSystemTimeZoneDidChange)
+        ) { _ in
+            Task {
+                await viewModel.refreshDayIfNeeded()
+            }
+        }
         .onDisappear {
             viewModel.onDisappear()
             container.agentActivity?.setVisible(false)
@@ -143,6 +245,11 @@ struct MenuBarRootView: View {
                 Text(localizedToday)
                     .font(.caption2)
                     .foregroundStyle(MoraeColor.secondaryForeground)
+                if let profileName = container.runtimeProfile.displayName {
+                    Text(profileName)
+                        .font(.system(size: 9.5, weight: .medium))
+                        .foregroundStyle(MoraeColor.accent)
+                }
             }
             Spacer()
             Button {
@@ -162,8 +269,8 @@ struct MenuBarRootView: View {
                     }
                     Text(
                         viewModel.briefingState.isLoading
-                            ? "생성 중"
-                            : "오늘 브리핑"
+                            ? "찾는 중"
+                            : "아티클 추천받기"
                     )
                 }
             }
@@ -178,8 +285,8 @@ struct MenuBarRootView: View {
                     || viewModel.briefingState.isLoading
             )
             .help("클릭할 때만 피드에서 오늘의 아티클을 확인합니다.")
-            SettingsLink {
-                Label("설정", systemImage: "ellipsis")
+            Button(action: openSettings) {
+                Label("설정", systemImage: "gearshape")
                     .labelStyle(.iconOnly)
             }
             .buttonStyle(
@@ -227,7 +334,7 @@ struct MenuBarRootView: View {
                     in: RoundedRectangle(cornerRadius: MoraeRadius.medium)
                 )
                 .accessibilityElement(children: .combine)
-                .accessibilityLabel("오늘 브리핑 생성 중")
+                .accessibilityLabel("오늘의 아티클 찾는 중")
             case let .success(briefing):
                 briefingSuccessContent(briefing)
             case let .failure(failure, previous):
@@ -242,7 +349,176 @@ struct MenuBarRootView: View {
                     recovery: failure.code.recovery
                 )
             }
+            if !viewModel.savedArticles.isEmpty {
+                savedArticlesList
+            }
         }
+    }
+
+    @ViewBuilder
+    private var aiReportSection: some View {
+        sectionContainer(
+            .aiReport,
+            count: viewModel.aiReportState.latestSuccess == nil ? "0" : "1",
+            headerAccessory: {
+                Button {
+                    Task {
+                        await viewModel.requestAIReport()
+                    }
+                } label: {
+                    HStack(spacing: MoraeSpacing.xSmall) {
+                        if viewModel.aiReportState.isLoading {
+                            ProgressView()
+                                .controlSize(.small)
+                                .frame(width: 10, height: 10)
+                        } else {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.system(size: 10))
+                        }
+                        Text(
+                            viewModel.aiReportState.isLoading
+                                ? "만드는 중"
+                                : "리포트 받기"
+                        )
+                    }
+                } // label
+                .buttonStyle(MoraeCompactButtonStyle(variant: .chip))
+                .disabled(
+                    container.generateAIReport == nil
+                        || viewModel.aiReportState.isLoading
+                )
+                .help("어제 하루의 AI 활용을 모아 요약합니다. 1분 정도 걸립니다.")
+            },
+            content: {
+                switch viewModel.aiReportState {
+                case let .idle(previous):
+                    if let previous {
+                        aiReportContent(previous)
+                    } else {
+                        emptyMessage(for: .aiReport)
+                    }
+                case let .loading(previous):
+                    if let previous {
+                        aiReportContent(previous)
+                            .opacity(0.62)
+                    }
+                    HStack(spacing: MoraeSpacing.small) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("어제 기록을 모으고 있습니다.")
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(MoraeColor.secondaryForeground)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(MoraeSpacing.regular)
+                    .background(
+                        MoraeColor.subtleFill,
+                        in: RoundedRectangle(cornerRadius: MoraeRadius.medium)
+                    )
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("어제의 AI 리포트 만드는 중")
+                case let .success(report):
+                    aiReportContent(report)
+                case let .failure(code, previous):
+                    if let previous {
+                        aiReportContent(previous)
+                            .opacity(0.72)
+                    }
+                    MenuBarStateView(
+                        kind: .error,
+                        title: code.title,
+                        message: code.message,
+                        recovery: code.recovery
+                    )
+                }
+            }
+        )
+    }
+
+    @ViewBuilder
+    private func aiReportContent(_ report: AIReport) -> some View {
+        VStack(alignment: .leading, spacing: MoraeSpacing.small) {
+            Text(Self.reportDayLabel(report.day))
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(MoraeColor.mutedForeground)
+
+            if let headline = report.headline, !headline.isEmpty {
+                Text(headline)
+                    .font(.system(size: 12, weight: .semibold))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if report.tokenCount != nil || report.costUSD != nil {
+                HStack(spacing: MoraeSpacing.compact) {
+                    if let tokens = report.tokenCount {
+                        metricPill(
+                            Self.tokenLabel(tokens),
+                            // percentile_rank 95 = 상위 5%
+                            highlight: report.tokenPercentile.map {
+                                "상위 \(max(100 - $0, 1))%"
+                            }
+                        )
+                    }
+                    if let cost = report.costUSD {
+                        metricPill(
+                            String(format: "$%.0f", cost),
+                            highlight: nil
+                        )
+                    }
+                }
+            }
+
+            if let body = report.body, !body.isEmpty {
+                Text(body)
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(MoraeColor.secondaryForeground)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(MoraeSpacing.regular)
+        .background(
+            MoraeColor.subtleFill,
+            in: RoundedRectangle(cornerRadius: MoraeRadius.medium)
+        )
+        .accessibilityElement(children: .combine)
+    }
+
+    @ViewBuilder
+    private func metricPill(
+        _ value: String,
+        highlight: String?
+    ) -> some View {
+        HStack(spacing: MoraeSpacing.xSmall) {
+            Text(value)
+                .font(.system(size: 11, weight: .semibold))
+            if let highlight {
+                Text(highlight)
+                    .font(.system(size: 10))
+                    .foregroundStyle(MoraeColor.accent)
+            }
+        }
+        .padding(.horizontal, 7)
+        .padding(.vertical, 3)
+        .background(MoraeColor.chipFill, in: Capsule())
+    }
+
+    private static func tokenLabel(_ value: Int64) -> String {
+        let million = Double(value) / 1_000_000
+        if million >= 1_000 {
+            return String(format: "%.1fB", million / 1_000)
+        }
+        return String(format: "%.0fM", million)
+    }
+
+    private static func reportDayLabel(_ day: LocalDay) -> String {
+        let parts = day.rawValue.split(separator: "-")
+        guard parts.count == 3,
+              let month = Int(parts[1]),
+              let dayOfMonth = Int(parts[2]) else {
+            return day.rawValue
+        }
+        return "\(month)월 \(dayOfMonth)일"
     }
 
     @ViewBuilder
@@ -263,10 +539,12 @@ struct MenuBarRootView: View {
     }
 
     private func articleCard(_ article: Article) -> some View {
-        Button {
-            openURL(article.canonicalURL)
-        } label: {
-            VStack(alignment: .leading, spacing: MoraeSpacing.small) {
+        VStack(alignment: .leading, spacing: MoraeSpacing.small) {
+            Button {
+                Task { await viewModel.markArticleRead(article) }
+                openURL(article.canonicalURL)
+            } label: {
+                VStack(alignment: .leading, spacing: MoraeSpacing.small) {
                 Text(article.title)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(MoraeColor.foreground)
@@ -289,26 +567,105 @@ struct MenuBarRootView: View {
                 }
                 .font(.system(size: 11))
                 .foregroundStyle(MoraeColor.secondaryForeground)
+                }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(MoraeSpacing.medium)
-            .background(
-                MoraeColor.selectedFill,
-                in: RoundedRectangle(cornerRadius: MoraeRadius.large)
-            )
-            .overlay {
-                RoundedRectangle(cornerRadius: MoraeRadius.large)
-                    .stroke(MoraeColor.accent.opacity(0.20), lineWidth: 0.5)
+            .buttonStyle(.plain)
+            .help("기본 브라우저에서 원문 열기")
+
+            HStack(spacing: MoraeSpacing.compact) {
+                articleFeedbackButton(
+                    "관심 없음",
+                    systemImage: "hand.thumbsdown"
+                ) {
+                    await viewModel.dismissArticle(article)
+                }
+                articleFeedbackButton(
+                    "이 주제 더 보기",
+                    systemImage: article.feedback == .moreLikeThis
+                        ? "hand.thumbsup.fill"
+                        : "hand.thumbsup",
+                    isSelected: article.feedback == .moreLikeThis
+                ) {
+                    await viewModel.toggleMoreLikeThis(article)
+                }
+                articleFeedbackButton(
+                    "나중에 읽기",
+                    systemImage: article.isLiked
+                        ? "bookmark.fill"
+                        : "bookmark",
+                    isSelected: article.isLiked
+                ) {
+                    await viewModel.toggleArticleSaved(article)
+                }
             }
-            .contentShape(
-                RoundedRectangle(cornerRadius: MoraeRadius.large)
-            )
         }
-        .buttonStyle(.plain)
-        .help("기본 브라우저에서 원문 열기")
-        .accessibilityLabel(
-            "\(article.title), \(article.sourceName), 원문 열기"
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(MoraeSpacing.medium)
+        .background(
+            MoraeColor.selectedFill,
+            in: RoundedRectangle(cornerRadius: MoraeRadius.large)
         )
+        .overlay {
+            RoundedRectangle(cornerRadius: MoraeRadius.large)
+                .stroke(MoraeColor.accent.opacity(0.20), lineWidth: 0.5)
+        }
+    }
+
+    private func articleFeedbackButton(
+        _ title: String,
+        systemImage: String,
+        isSelected: Bool = false,
+        action: @escaping @MainActor () async -> Void
+    ) -> some View {
+        Button {
+            Task { await action() }
+        } label: {
+            Label(title, systemImage: systemImage)
+                .font(.system(size: 10.5, weight: .medium))
+                .lineLimit(1)
+        }
+        .buttonStyle(MoraeCompactButtonStyle(variant: .chip))
+        .tint(isSelected ? MoraeColor.accent : MoraeColor.secondaryForeground)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    private var savedArticlesList: some View {
+        DisclosureGroup("나중에 읽기 · \(viewModel.savedArticles.count)") {
+            VStack(spacing: 0) {
+                ForEach(viewModel.savedArticles) { article in
+                    Button {
+                        Task { await viewModel.markArticleRead(article) }
+                        openURL(article.canonicalURL)
+                    } label: {
+                        HStack(spacing: MoraeSpacing.small) {
+                            Image(systemName: "bookmark.fill")
+                                .foregroundStyle(MoraeColor.accent)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(article.title)
+                                    .lineLimit(2)
+                                    .foregroundStyle(MoraeColor.foreground)
+                                Text(article.sourceName)
+                                    .font(.system(size: 10.5))
+                                    .foregroundStyle(
+                                        MoraeColor.secondaryForeground
+                                    )
+                            }
+                            Spacer(minLength: 0)
+                        }
+                        .font(.system(size: 11.5))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, MoraeSpacing.compact)
+                    }
+                    .buttonStyle(.plain)
+                    if article.id != viewModel.savedArticles.last?.id {
+                        Divider()
+                    }
+                }
+            }
+            .padding(.top, MoraeSpacing.compact)
+        }
+        .font(.system(size: 11.5, weight: .medium))
+        .padding(.horizontal, MoraeSpacing.compact)
     }
 
     private var yesterdaySection: some View {
@@ -377,7 +734,13 @@ struct MenuBarRootView: View {
     }
 
     private var todaySection: some View {
-        sectionContainer(.todayTodos, count: todayCountLabel) {
+        sectionContainer(
+            .todayTodos,
+            count: todayCountLabel,
+            headerAccessory: {
+                jiraSyncButton
+            }
+        ) {
             HStack(spacing: MoraeSpacing.compact) {
                 TextField("빠른 할 일 추가", text: $quickAddTitle)
                     .focused($isQuickAddFocused)
@@ -462,6 +825,43 @@ struct MenuBarRootView: View {
                     message: errorMessage
                 )
             }
+            if let jiraSyncMessage = viewModel.jiraSyncMessage {
+                Text(jiraSyncMessage)
+                    .font(.caption)
+                    .foregroundStyle(MoraeColor.secondaryForeground)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var jiraSyncButton: some View {
+        if viewModel.isJiraConnected {
+            Button {
+                Task {
+                    await viewModel.syncJiraNow()
+                }
+            } label: {
+                if viewModel.isJiraSyncing {
+                    ProgressView()
+                        .controlSize(.mini)
+                        .frame(width: 11, height: 11)
+                        .tint(MoraeColor.accent)
+                } else {
+                    Image(systemName: "arrow.clockwise")
+                }
+            }
+            .buttonStyle(MoraeAccentIconButtonStyle())
+            .disabled(viewModel.isJiraSyncing)
+            .help(
+                viewModel.isJiraSyncing
+                    ? "Jira 할 일을 동기화하고 있습니다."
+                    : "Jira 할 일을 지금 동기화"
+            )
+            .accessibilityLabel(
+                viewModel.isJiraSyncing
+                    ? "Jira 동기화 중"
+                    : "Jira 지금 동기화"
+            )
         }
     }
 
@@ -603,6 +1003,11 @@ struct MenuBarRootView: View {
             onDelete: {
                 editingDraft = nil
                 viewModel.requestDelete(id: item.id)
+            },
+            onOpenRelatedURL: {
+                if let url = item.relatedURL {
+                    openURL(url)
+                }
             }
         )
     }
@@ -658,7 +1063,12 @@ struct MenuBarRootView: View {
 
     private var agentSection: some View {
         let runs = container.agentActivity?.runs ?? []
-        return sectionContainer(.recentAgents, count: String(runs.count)) {
+        let groups = AgentRunGrouping.recentGroups(from: runs)
+        let visibleRunCount = groups.reduce(0) { $0 + $1.runs.count }
+        return sectionContainer(
+            .recentAgents,
+            count: String(visibleRunCount)
+        ) {
             if let errorMessage = container.agentActivity?.errorMessage {
                 MenuBarStateView(
                     kind: .error,
@@ -669,7 +1079,7 @@ struct MenuBarRootView: View {
                 emptyMessage(for: .recentAgents)
             } else {
                 VStack(alignment: .leading, spacing: MoraeSpacing.regular) {
-                    ForEach(agentRunGroups(for: runs)) { group in
+                    ForEach(groups) { group in
                         VStack(alignment: .leading, spacing: 0) {
                             Text(group.title)
                                 .font(.system(size: 10.5, weight: .semibold))
@@ -759,31 +1169,6 @@ struct MenuBarRootView: View {
         )
     }
 
-    private func agentRunGroups(for runs: [AgentRun]) -> [AgentRunGroup] {
-        var groupOrder: [String] = []
-        var grouped: [String: [AgentRun]] = [:]
-        for run in runs {
-            let title = agentGroupTitle(run)
-            if grouped[title] == nil {
-                groupOrder.append(title)
-            }
-            grouped[title, default: []].append(run)
-        }
-        return groupOrder.map {
-            AgentRunGroup(id: $0, title: $0, runs: grouped[$0] ?? [])
-        }
-    }
-
-    private func agentGroupTitle(_ run: AgentRun) -> String {
-        guard let path = run.projectPath, !path.isEmpty else {
-            return agentSourceName(run.source)
-        }
-        let components = URL(fileURLWithPath: path)
-            .pathComponents
-            .filter { $0 != "/" }
-        return components.suffix(2).joined(separator: "/")
-    }
-
     private func agentSourceName(_ source: AgentSource) -> String {
         source == .codex ? "Codex" : "Claude"
     }
@@ -843,6 +1228,23 @@ struct MenuBarRootView: View {
         count: String? = nil,
         @ViewBuilder content: () -> Content
     ) -> some View {
+        sectionContainer(
+            section,
+            count: count,
+            headerAccessory: { EmptyView() },
+            content: content
+        )
+    }
+
+    private func sectionContainer<
+        HeaderAccessory: View,
+        Content: View
+    >(
+        _ section: MenuBarSection,
+        count: String? = nil,
+        @ViewBuilder headerAccessory: () -> HeaderAccessory,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
         VStack(alignment: .leading, spacing: MoraeSpacing.compact) {
             HStack(alignment: .firstTextBaseline, spacing: MoraeSpacing.compact) {
                 Text(section.title)
@@ -855,6 +1257,7 @@ struct MenuBarRootView: View {
                         .foregroundStyle(MoraeColor.mutedForeground)
                         .accessibilityLabel("\(count)개 항목")
                 }
+                headerAccessory()
             }
             .padding(.horizontal, MoraeSpacing.xSmall)
             content()

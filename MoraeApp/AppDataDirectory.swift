@@ -1,4 +1,66 @@
+import Darwin
 import Foundation
+
+enum MoraeRuntimeProfile: Equatable, Sendable {
+    case standard
+    case freshTest(sessionID: String)
+
+    static func current(
+        arguments: [String] = CommandLine.arguments,
+        processID: Int32 = ProcessInfo.processInfo.processIdentifier
+    ) -> MoraeRuntimeProfile {
+        arguments.contains("--fresh-test-profile")
+            ? .freshTest(sessionID: String(processID))
+            : .standard
+    }
+
+    var isFreshTest: Bool {
+        if case .freshTest = self {
+            return true
+        }
+        return false
+    }
+
+    var displayName: String? {
+        isFreshTest ? "첫 실행 테스트 모드" : nil
+    }
+
+    var sessionRootURL: URL? {
+        guard case let .freshTest(sessionID) = self else { return nil }
+        return FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "morae-fresh-test-\(getuid())-\(sessionID)",
+                isDirectory: true
+            )
+    }
+
+    var defaultsSuiteName: String? {
+        guard case let .freshTest(sessionID) = self else { return nil }
+        return "io.github.heejung-29cm.morae.fresh-test.\(sessionID)"
+    }
+
+    func makeUserDefaults(
+        resetPersistentDomain: Bool = false
+    ) -> UserDefaults {
+        guard let defaultsSuiteName,
+              let defaults = UserDefaults(suiteName: defaultsSuiteName)
+        else {
+            return .standard
+        }
+        if resetPersistentDomain {
+            defaults.removePersistentDomain(forName: defaultsSuiteName)
+        }
+        return defaults
+    }
+
+    func cleanUp() {
+        guard isFreshTest else { return }
+        if let defaultsSuiteName {
+            UserDefaults(suiteName: defaultsSuiteName)?
+                .removePersistentDomain(forName: defaultsSuiteName)
+        }
+    }
+}
 
 struct AppDataPaths: Equatable, Sendable {
     let directoryURL: URL

@@ -167,6 +167,36 @@ struct MoraeIconButtonStyle: ButtonStyle {
     }
 }
 
+struct MoraeAccentIconButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
+    var size: CGFloat = 22
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(MoraeColor.accent)
+            .frame(width: size, height: size)
+            .background(
+                configuration.isPressed
+                    ? MoraeColor.accent.opacity(0.18)
+                    : MoraeColor.selectedFill,
+                in: RoundedRectangle(cornerRadius: MoraeRadius.small)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: MoraeRadius.small)
+                    .stroke(
+                        MoraeColor.accent.opacity(
+                            configuration.isPressed ? 0.26 : 0.14
+                        ),
+                        lineWidth: 0.5
+                    )
+            }
+            .opacity(isEnabled ? 1 : 0.50)
+            .contentShape(Rectangle())
+    }
+}
+
 extension View {
     func moraeInput(isFocused: Bool) -> some View {
         modifier(MoraeInputModifier(isFocused: isFocused))

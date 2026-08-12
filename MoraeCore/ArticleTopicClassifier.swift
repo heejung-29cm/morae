@@ -1,17 +1,22 @@
 import Foundation
 
-enum ArticleTopic: Int, Sendable {
-    case other = 0
-    case infrastructureAndData = 20
-    case collaboration = 45
-    case aiAndFrontend = 120
+public enum ArticleTopic: String, Codable, CaseIterable, Sendable {
+    case other
+    case infrastructureAndData = "infrastructure_and_data"
+    case collaboration
+    case aiAndFrontend = "ai_and_frontend"
 
     var selectionScore: Int {
-        rawValue
+        switch self {
+        case .other: 0
+        case .infrastructureAndData: 20
+        case .collaboration: 45
+        case .aiAndFrontend: 120
+        }
     }
 }
 
-struct ArticleTopicClassifier: Sendable {
+public struct ArticleTopicClassifier: Sendable {
     private static let aiAndFrontendTokens: Set<String> = [
         "agent", "agentic", "agents", "ai", "angular", "browser", "chrome",
         "claude", "css", "fe", "frontend", "gemini", "gpt", "html",
@@ -75,7 +80,9 @@ struct ArticleTopicClassifier: Sendable {
         "파이프라인",
     ]
 
-    func classify(_ title: String) -> ArticleTopic {
+    public init() {}
+
+    public func classify(_ title: String) -> ArticleTopic {
         if matches(
             title,
             tokens: Self.aiAndFrontendTokens,

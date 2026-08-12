@@ -1,7 +1,7 @@
 # 모래 Low-Level Design
 
 > 상태: Accepted  
-> 최종 수정: 2026-07-30
+> 최종 수정: 2026-07-31
 > 대상: MVP  
 > 상위 문서: [README](../README.md), [HLD](HLD.md)  
 > 아키텍처 결정: [ADR](adr/)
@@ -19,12 +19,13 @@
 - 사용자 에이전트 작업은 모래의 이벤트 전달 실패 때문에 실패하지 않아야 합니다.
 - 시간의 순간은 UTC Unix millisecond, 사용자의 날짜는 `LocalDay`로 명시적으로 구분합니다.
 
-현재 as-built 범위는 Sprint 0부터 Sprint 5까지입니다. 따라서 이
+현재 as-built 범위는 Sprint 0부터 Sprint 8까지입니다. 따라서 이
 문서의 Todo·DB·메뉴 막대 UI, Feed·Article과 수동 Briefing 절은 구현과
 동기화돼 있으며 Agent IPC 절의 envelope, CLI, UDS client/server와 ACK도
 구현됐습니다. Agent 정규화·턴 연결·저장·90일 정리·최근 기록 UI·unread
-표시와 기본 macOS 알림도 live 경로에 연결됐습니다. Settings·Hook 설치와
-배포 절은 후속 Sprint의 확정 설계입니다.
+표시와 기본 macOS 알림도 live 경로에 연결됐습니다. Settings·Hook 설치
+안내, 개인정보 scrub, 로그인 실행과 개인용 DMG 배포, Jira 가져오기,
+버전형 온보딩과 로컬 아티클 피드백도 구현됐습니다.
 
 ## 2. 빌드 단위
 
@@ -123,6 +124,11 @@ protocol Clock: Sendable {
 
 - `LocalDay`는 사용자의 현재 `Calendar.autoupdatingCurrent`와 time zone으로 만듭니다.
 - Task의 "오늘/어제"는 현재 시스템 time zone을 따릅니다.
+- 메뉴 막대가 나타날 때마다 현재 `LocalDay`를 재확인합니다.
+- 메뉴 막대가 열린 동안 `NSCalendarDayChanged`,
+  `NSSystemClockDidChange`, `NSSystemTimeZoneDidChange`를 수신하면 기존
+  날짜의 DB observation을 취소하고 새 오늘/어제 목록과 당일 브리핑을
+  다시 불러옵니다.
 - DB의 `*_at_ms` 값은 UTC Unix millisecond입니다.
 - 시스템 time zone이 바뀌어도 이미 저장한 `task_day`는 자동 변환하지 않습니다.
 
@@ -994,26 +1000,46 @@ MVP는 `destination`만 사용하고 agentRunID 상세 딥링크는 2단계까�
 @main
 struct MoraeApp: App {
     var body: some Scene {
-        MenuBarExtra("모래", systemImage: menuBarIcon) {
+        MenuBarExtra {
             MenuBarRootView()
+        } label: {
+            HamsterMenuBarIcon(isAnimating: shouldAnimate)
         }
         .menuBarExtraStyle(.window)
 
-        Settings {
-            SettingsRootView()
-        }
     }
 }
 ```
 
-메뉴 막대 아이콘은 미확인 AgentRun이 있으면 filled variant 또는 overlay dot를 사용합니다.
+설정은 SwiftUI `Settings` scene 대신 앱이 보유한 `NSWindowController`로
+표시합니다. 메뉴의 설정 버튼은 `NSApp.activate`, `makeKeyAndOrderFront`를
+호출하고 window에 `moveToActiveSpace`와 `fullScreenAuxiliary`를 적용해,
+사용자가 다른 Space나 전체 화면 앱에서 눌러도 현재 작업 공간에 나타나게
+합니다.
+
+`HamsterMenuBarIcon`은 asset catalog의 13프레임 GIF를 ImageIO로 읽고
+90ms 간격으로 재생합니다. 정지 상태에는 사용자가 선택한 6번 프레임을
+사용합니다. `MenuBarExtra`가 SwiftUI의 크기 지정 대신 원본 이미지의 고유
+크기를 사용하더라도 확대되지 않도록 각 `NSImage` 프레임의 고유 크기와
+라벨 캔버스를 모두 14×14pt로 고정합니다. Claude의 실행 중 `AgentRun` 또는
+미확인 Codex/Claude
+`AgentRun`이 있을 때만 움직이고, 메뉴를 열어 읽음 처리한 뒤 진행 중인
+Claude 작업이 없으면 정지합니다. 앱 번들과 DMG 안의 앱 아이콘도 같은
+6번 프레임으로 생성한 `AppIcon` asset을 사용합니다.
+
+`MenuBarExtra`의 상태 아이템은 라벨에 적용한 SwiftUI `contextMenu`까지
+우클릭을 전달하지 않으므로 `MoraeApplicationDelegate`가
+`.rightMouseDown` 로컬 이벤트를 감시합니다. 이벤트가 Morae 프로세스의
+`NSStatusBarButton` 계층에서 발생한 경우에만 `Morae 종료` AppKit 메뉴를
+표시하고 이벤트를 소비합니다. 다른 창과 좌클릭 이벤트는 그대로 전달하며,
+종료 항목을 선택하면 `NSApplication.terminate(_:)`로 정상 종료합니다.
 
 ### 15.2 MenuBarRootView
 
 상단:
 
 - 날짜
-- "오늘 브리핑 만들기" 버튼
+- "아티클 추천받기" 버튼
 - 실행 중 progress
 - 설정 버튼
 
@@ -1049,7 +1075,8 @@ enum BriefingViewState: Equatable {
 
 - 빠른 추가는 inline TextField입니다.
 - Return으로 저장, Escape로 취소합니다.
-- title validation 오류는 inline으로 표시합니다.
+- title validation 오류는 inline으로 표시하고 입력 변경 또는 3초 경과 시
+  자동으로 숨깁니다.
 - pointer reorder는 pending 목록 안에서만 허용합니다.
 - `MenuBarExtra(.window)`의 시스템 drop routing에 의존하지 않고, 행의
   3pt threshold `DragGesture`와 named coordinate space의 row frame을
@@ -1062,13 +1089,19 @@ enum BriefingViewState: Equatable {
   이동 action을 제공합니다.
 - 완료 토글 시 `completedAt=now`.
 - 완료 취소 시 `completedAt=nil`.
-- 삭제는 undo 가능한 로컬 UI action으로 5초 제공하되 DB 삭제는 즉시 수행하고 undo 시 새 insert합니다.
+- 삭제는 undo 가능한 로컬 UI action으로 5초 제공하되 DB 삭제는 즉시
+  수행하고 undo 시 새 insert합니다.
 
 ### 15.5 Agent 기록
 
-- 최근 20개를 `updatedAt DESC`로 표시합니다.
-- projectPath opt-in이 켜지면 path의 마지막 두 component로 그룹핑합니다.
-- opt-in이 꺼지면 source별로 그룹핑합니다.
+- 최근 20개를 관찰한 뒤 `updatedAt DESC` 기준으로 표시 대상을 정합니다.
+- 최근 활동이 있는 그룹을 최대 2개 표시하고, 그룹마다 최신 기록을 최대
+  2개 표시합니다.
+- projectPath opt-in이 켜지면 전체 표준화 경로를 그룹 식별자로 사용하고,
+  화면에는 path의 마지막 두 component를 표시합니다.
+- opt-in이 꺼지면 source별로 그룹핑하며 같은 2개 그룹 × 2개 기록 제한을
+  적용합니다.
+- 섹션 count는 제한 적용 후 실제 화면에 표시된 기록 수입니다.
 - 리스트를 열면 현재 표시된 run을 read로 표시합니다.
 - status는 색상만으로 구분하지 않고 icon과 문구를 함께 사용합니다.
 
@@ -1077,8 +1110,9 @@ enum BriefingViewState: Equatable {
 탭:
 
 - General: 로그인 실행
-- Briefing: 관심 분야, feed source
-- Agents: Hook 스니펫, socket 상태, 마지막 수신 시각
+- Article: 관심 분야, feed source
+- Agents: Codex/Claude Hook 자동 연결 상태, 직접 설정 스니펫, 알림 권한
+- Integrations: Jira 사이트 → 계정·토큰 → 연결 확인 순서의 안내형 인증
 - Privacy: nullable 필드 저장과 상세 알림 opt-in
 - About: 버전, DB schema version, 공식 문서 링크
 
@@ -1325,3 +1359,82 @@ OSLog subsystem: io.github.heejung-29cm.morae
 
 - macOS 14를 지원하는 GRDB와 FeedKit 호환 버전
 - 공개 배포나 WidgetKit 요구가 생기면 ADR-0009에 따라 Developer ID·공증 또는 App Group과 데이터 이전을 재검토
+
+## 25. Jira Cloud 연동
+
+Jira Cloud 연동은 Sprint 7 as-built 코드 범위입니다. 상세 계약은
+[Jira Cloud 연동 설계](JIRA_INTEGRATION_DESIGN.md)와
+[ADR-0016](adr/0016-read-only-jira-daily-import.md)을 source of truth로
+사용합니다.
+
+핵심 경계:
+
+- `JiraClient`, `JiraCredentialStoring`, `JiraConnectionStoring`은
+  Infrastructure adapter입니다.
+- `JiraIntegrationService`는 Application service이며 Jira DTO를 Todo domain으로
+  직접 노출하지 않습니다.
+- Jira API token은 Keychain에만 저장합니다.
+- `v5_jira_task_origin`이 날짜별 외부 issue idempotency를 추가합니다.
+- `v6_jira_daily_dismissal`은 사용자가 삭제한 Jira issue를 LocalDay
+  범위에서 기억해 같은 날 재동기화 시 다시 만들지 않습니다.
+- Jira Todo의 로컬 완료와 순서는 같은 날짜 재동기화가 덮어쓰지 않습니다.
+- Jira Todo 삭제와 5초 undo를 허용하며 undo 시 dismissal도 제거합니다.
+- Jira Todo는 자동 날짜별 materialization 대상이므로 carry-over 후보에서
+  제외합니다.
+
+## 26. 첫 실행 테스트 프로필
+
+`--fresh-test-profile`은 기존 사용자 계정을 초기화하지 않고 신규 설치
+흐름을 검증하기 위한 명시적 실행 모드입니다.
+
+- 프로세스별 임시 Application Support에 새 DB를 생성합니다.
+- 프로세스별 UserDefaults suite를 사용합니다.
+- Jira credential은 Keychain 대신 메모리에만 저장합니다.
+- Codex·Claude 자동 설정은 임시 가상 홈과 임시 helper 경로에 적용합니다.
+- 로그인 실행과 알림 권한은 메모리 구현으로 대체합니다.
+- 실제 agent socket을 열지 않아 일반 실행 인스턴스와 충돌하지 않습니다.
+- 메뉴와 설정 창에 테스트 모드를 명시하고 정상 종료 시 테스트용
+  UserDefaults를 삭제합니다. 열린 SQLite 파일은 강제로 지우지 않고
+  macOS 임시 디렉터리 정리에 맡깁니다.
+
+## 27. 버전형 첫 실행 온보딩
+
+- `UserDefaultsOnboardingStateStore`는 `onboarding.completedVersion`을
+  관리하며 현재 계약 버전은 1입니다.
+- `MoraeOnboardingWindowController`는 앱 launch 완료 시 미완료 사용자에게
+  660×590pt 창을 현재 Space의 key window로 표시합니다.
+- 단계는 환영, 관심사, 에이전트·알림, 선택적 Jira, 완료 순서입니다.
+- Jira 연결을 건너뛰어도 완료할 수 있습니다. 닫기 버튼만 누른 경우에는
+  완료로 기록하지 않아 다음 실행에서 다시 표시합니다.
+- 일반 설정의 `온보딩 다시 보기`는 완료 상태와 무관하게 같은 창을 엽니다.
+- `--fresh-test-profile`에서는 격리 UserDefaults를 사용하므로 매 프로세스가
+  신규 사용자 온보딩으로 시작합니다.
+
+## 28. 아티클 피드백 상세
+
+DB v7은 `articles`에 다음 필드를 추가합니다.
+
+| 필드 | 값 | 용도 |
+| --- | --- | --- |
+| `feedback` | `neutral`, `not_interested`, `more_like_this` | 명시적 추천 피드백 |
+| `topic` | `other`, `infrastructure_and_data`, `collaboration`, `ai_and_frontend` | 제목 메타데이터 분류 결과 |
+
+`ArticleRepository.feedbackSignals()`는 제외 URL, 선호 주제 횟수와 소문자로
+정규화한 선호 출처 횟수를 구성합니다. `ArticleSelector`는 제외 URL을
+후보에서 제거하고 주제당 최대 60점, 출처당 최대 30점을 더합니다. 기존
+최신성, 기본 주제 우선순위, 관심사, 소스 가중치, 읽음·최근 추천 신호는
+그대로 유지합니다.
+
+메뉴 동작:
+
+- `관심 없음`: 피드백 저장 후 사용자 동작 안에서 새 추천을 한 번
+  실행하며 자동 재시도하지 않습니다.
+- `이 주제 더 보기`: 선택과 해제를 모두 지원하고 현재 카드를 갱신합니다.
+- `나중에 읽기`: bookmark 상태를 전환하고 최근 저장 5개를 DisclosureGroup에
+  표시합니다.
+- 원문 열기: 기존처럼 기본 브라우저를 사용하고 로컬 읽음 상태만
+  갱신합니다.
+
+결정 근거는
+[ADR-0018](adr/0018-versioned-onboarding-and-local-article-feedback.md)을
+따릅니다.

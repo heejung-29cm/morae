@@ -62,6 +62,31 @@ final class HamsterEventCLITests: XCTestCase {
         XCTAssertEqual(sender.frames.count, 1)
     }
 
+    func testCodexRelaySendsMoraeEventAndForwardsExistingNotify() throws {
+        let sender = RecordingSender()
+        var forwardedCommand: [String]?
+        var forwardedPayload: String?
+        let command = HamsterEventCommand(
+            sender: sender,
+            socketURL: URL(fileURLWithPath: "/tmp/test.sock"),
+            forwardCodexNotify: { existing, payload in
+                forwardedCommand = existing
+                forwardedPayload = payload
+            }
+        )
+        let existing = ["/Applications/Existing.app/notify", "turn-ended"]
+        let encoded = try JSONEncoder().encode(existing).base64EncodedString()
+        let payload = #"{"type":"agent-turn-complete"}"#
+
+        command.run(
+            arguments: ["--morae-codex-relay", encoded, payload]
+        )
+
+        XCTAssertEqual(sender.frames.count, 1)
+        XCTAssertEqual(forwardedCommand, existing)
+        XCTAssertEqual(forwardedPayload, payload)
+    }
+
     func testResolvesPerUserSocketLocation() {
         let url = AgentSocketLocation.url(
             temporaryDirectory: URL(fileURLWithPath: "/tmp"),

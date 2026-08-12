@@ -5,6 +5,86 @@ import MoraeCore
 @testable import MoraeApp
 
 final class MoraeAppTests: XCTestCase {
+    @MainActor
+    func testHamsterMenuBarIconUsesAllFramesAndRestsOnFrameSix() {
+        XCTAssertEqual(HamsterMenuBarIcon.frames.count, 13)
+        XCTAssertEqual(HamsterMenuBarIcon.restingFrameNumber, 6)
+        XCTAssertEqual(HamsterMenuBarIcon.canvasSize, 14)
+        XCTAssertEqual(HamsterMenuBarIcon.glyphSize, 14)
+        XCTAssertTrue(
+            HamsterMenuBarIcon.frames.allSatisfy {
+                $0.size == NSSize(width: 14, height: 14)
+            }
+        )
+        XCTAssertNotNil(
+            HamsterMenuBarIcon.frame(at: .distantPast, animated: false)
+        )
+    }
+
+    @MainActor
+    func testMenuBarRightClickRecognizesStatusItemHierarchy() {
+        let rootView = NSView(frame: .zero)
+        XCTAssertFalse(
+            MoraeApplicationDelegate.containsStatusBarButton(in: rootView)
+        )
+
+        rootView.addSubview(NSStatusBarButton(frame: .zero))
+
+        XCTAssertTrue(
+            MoraeApplicationDelegate.containsStatusBarButton(in: rootView)
+        )
+        XCTAssertEqual(
+            MoraeApplicationDelegate.quitMenuTitle,
+            "Morae 종료"
+        )
+    }
+
+    func testAgentRunGroupingShowsTwoRecentFoldersAndTwoRunsEach() {
+        let baseDate = Date(unixMilliseconds: 1_800_000_000_000)
+        func run(
+            _ turnID: String,
+            path: String,
+            secondsAgo: TimeInterval
+        ) -> AgentRun {
+            AgentRun(
+                id: AgentRunID(rawValue: UUID()),
+                source: .codex,
+                sessionID: "session-\(turnID)",
+                turnID: turnID,
+                projectPath: path,
+                status: .completed,
+                receivedAt: baseDate.addingTimeInterval(-secondsAgo),
+                updatedAt: baseDate.addingTimeInterval(-secondsAgo)
+            )
+        }
+
+        let groups = AgentRunGrouping.recentGroups(
+            from: [
+                run("alpha-old", path: "/Users/me/Repos/alpha", secondsAgo: 50),
+                run("other-alpha", path: "/Other/Repos/alpha", secondsAgo: 30),
+                run("beta-new", path: "/Users/me/Repos/beta", secondsAgo: 10),
+                run("alpha-new", path: "/Users/me/Repos/alpha", secondsAgo: 0),
+                run("beta-old", path: "/Users/me/Repos/beta", secondsAgo: 40),
+                run("alpha-middle", path: "/Users/me/Repos/alpha", secondsAgo: 20),
+            ]
+        )
+
+        XCTAssertEqual(groups.map(\.title), ["Repos/alpha", "Repos/beta"])
+        XCTAssertEqual(
+            groups.map { $0.runs.map(\.turnID) },
+            [
+                ["alpha-new", "alpha-middle"],
+                ["beta-new", "beta-old"],
+            ]
+        )
+        XCTAssertEqual(groups.count, AgentRunGrouping.groupLimit)
+        XCTAssertTrue(
+            groups.allSatisfy {
+                $0.runs.count == AgentRunGrouping.runsPerGroup
+            }
+        )
+    }
+
     func testAppDataDirectoryCreatesMoraeDirectory() throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -15,6 +95,80 @@ final class MoraeAppTests: XCTestCase {
         XCTAssertEqual(paths.directoryURL.lastPathComponent, "Morae")
         XCTAssertEqual(paths.databaseURL.lastPathComponent, "morae.sqlite")
         XCTAssertTrue(FileManager.default.fileExists(atPath: paths.directoryURL.path))
+    }
+
+    func testFreshTestProfileUsesIsolatedPerProcessLocations() {
+        let profile = MoraeRuntimeProfile.current(
+            arguments: ["Morae", "--fresh-test-profile"],
+            processID: 4242
+        )
+
+        XCTAssertEqual(profile, .freshTest(sessionID: "4242"))
+        XCTAssertTrue(profile.isFreshTest)
+        XCTAssertEqual(profile.displayName, "첫 실행 테스트 모드")
+        XCTAssertTrue(
+            profile.sessionRootURL?.path.hasSuffix(
+                "morae-fresh-test-\(getuid())-4242"
+            ) == true
+        )
+        XCTAssertEqual(
+            profile.defaultsSuiteName,
+            "io.github.heejung-29cm.morae.fresh-test.4242"
+        )
+        XCTAssertEqual(
+            MoraeRuntimeProfile.current(
+                arguments: ["Morae"],
+                processID: 4242
+            ),
+            .standard
+        )
+    }
+
+    func testFreshTestJiraCredentialsStayInMemory() throws {
+        let store = InMemoryJiraCredentialStore()
+
+        try store.save(token: "test-token", accountEmail: "me@example.com")
+        XCTAssertEqual(
+            try store.load(accountEmail: "me@example.com"),
+            "test-token"
+        )
+
+        try store.delete(accountEmail: "me@example.com")
+        XCTAssertNil(try store.load(accountEmail: "me@example.com"))
+    }
+
+    @MainActor
+    func testFreshTestContainerStartsEmptyAndDoesNotOpenAgentSocket()
+        async throws
+    {
+        let profile = MoraeRuntimeProfile.freshTest(
+            sessionID: UUID().uuidString
+        )
+        let sessionRootURL = try XCTUnwrap(profile.sessionRootURL)
+
+        let container = AppContainer.live(profile: profile)
+        let repository = try XCTUnwrap(container.todoRepository)
+        let today = container.clock.localDay(
+            for: container.clock.now(),
+            calendar: .autoupdatingCurrent
+        )
+
+        let items = try await repository.list(day: today)
+        let jiraIntegration = try XCTUnwrap(container.jiraIntegration)
+        let jiraSnapshot = await jiraIntegration.snapshot()
+
+        XCTAssertTrue(items.isEmpty)
+        XCTAssertNil(jiraSnapshot.connection)
+        XCTAssertNil(container.agentSocketServer)
+        XCTAssertTrue(
+            FileManager.default.fileExists(
+                atPath: sessionRootURL.path
+            )
+        )
+
+        try container.database?.close()
+        profile.cleanUp()
+        try FileManager.default.removeItem(at: sessionRootURL)
     }
 
     func testAppDataDirectoryFailureProvidesRecoveryGuidance() throws {
@@ -56,6 +210,7 @@ final class MoraeAppTests: XCTestCase {
                 "agent-ipc",
                 "agent-normalization",
                 "notification",
+                "jira",
             ])
         )
         XCTAssertEqual(MoraeLogger.subsystem, "io.github.heejung-29cm.morae")
@@ -113,14 +268,20 @@ final class MoraeAppTests: XCTestCase {
             "agent_runs",
             "agent_events",
             "app_metadata",
+            "jira_task_dismissals",
             "idx_tasks_day_status_order",
             "idx_tasks_carry_target_source",
+            "idx_tasks_external_daily",
+            "idx_tasks_external_provider",
             "idx_articles_published",
+            "idx_articles_feedback",
             "idx_briefing_runs_day_triggered",
             "idx_agent_runs_recent",
             "idx_agent_runs_retention",
             "idx_agent_runs_open_session",
             "idx_agent_events_run_time",
+            "ai_reports",
+            "idx_ai_reports_day",
         ]).isSubset(of: Set(objects)))
 
         let migrations = try database.read { db in
@@ -136,7 +297,26 @@ final class MoraeAppTests: XCTestCase {
                 "v2_unique_carry_over",
                 "v3_app_metadata",
                 "v4_feed_selection_weight",
+                "v5_jira_task_origin",
+                "v6_jira_daily_dismissal",
+                "v7_article_feedback",
+                "v8_ai_reports",
             ]
+        )
+    }
+
+    func testOnboardingCompletionIsVersionedAndPersistent() {
+        let suite = "MoraeAppTests.onboarding.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = UserDefaultsOnboardingStateStore(defaults: defaults)
+
+        XCTAssertFalse(store.isCompleted())
+        store.markCompleted()
+        XCTAssertTrue(store.isCompleted())
+        XCTAssertTrue(
+            UserDefaultsOnboardingStateStore(defaults: defaults).isCompleted()
         )
     }
 
@@ -304,7 +484,13 @@ final class MoraeAppTests: XCTestCase {
     func testMenuBarSectionsFollowLLDOrderAndHaveEmptyStates() {
         XCTAssertEqual(
             MenuBarSection.orderedCases,
-            [.article, .yesterdayCompleted, .todayTodos, .recentAgents]
+            [
+                .article,
+                .aiReport,
+                .yesterdayCompleted,
+                .todayTodos,
+                .recentAgents,
+            ]
         )
         XCTAssertTrue(
             MenuBarSection.orderedCases.allSatisfy {
@@ -427,6 +613,150 @@ final class MoraeAppTests: XCTestCase {
         XCTAssertNotNil(object["hooks"])
         XCTAssertTrue(claude.contains("claude-task-completed"))
         XCTAssertTrue(claude.contains("claude-stop-failure"))
+    }
+
+    func testAutomaticHookSetupPreservesExistingCodexNotifyAndClaudeSettings()
+        throws
+    {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let home = root.appendingPathComponent("home", isDirectory: true)
+        let support = root.appendingPathComponent(
+            "support",
+            isDirectory: true
+        )
+        let source = root.appendingPathComponent("hamster-event")
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(
+            at: home.appendingPathComponent(".codex"),
+            withIntermediateDirectories: true
+        )
+        try FileManager.default.createDirectory(
+            at: home.appendingPathComponent(".claude"),
+            withIntermediateDirectories: true
+        )
+        try Data("helper".utf8).write(to: source)
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o755],
+            ofItemAtPath: source.path
+        )
+        let codexURL = home.appendingPathComponent(".codex/config.toml")
+        let originalCodex =
+            "model = \"gpt-test\"\nnotify = [\"/existing/notifier\", \"turn-ended\"]\n\n[features]\napps = true\n"
+        try Data(originalCodex.utf8).write(to: codexURL)
+        let claudeURL = home.appendingPathComponent(
+            ".claude/settings.json"
+        )
+        let originalClaude = """
+        {
+          "permissions": {"defaultMode": "acceptEdits"},
+          "hooks": {
+            "Stop": [{
+              "hooks": [{
+                "type": "command",
+                "command": "/existing/stop-hook"
+              }]
+            }]
+          }
+        }
+        """
+        try Data(originalClaude.utf8).write(to: claudeURL)
+        let installer = LiveAgentHookInstaller(
+            homeDirectoryURL: home,
+            applicationSupportURL: support
+        )
+
+        try installer.install(.codex, sourceHelperURL: source)
+        try installer.install(.claude, sourceHelperURL: source)
+
+        XCTAssertEqual(installer.status(for: .codex), .installed)
+        XCTAssertEqual(installer.status(for: .claude), .installed)
+        XCTAssertTrue(
+            FileManager.default.isExecutableFile(
+                atPath: installer.installedHelperURL().path
+            )
+        )
+        let codex = try String(contentsOf: codexURL, encoding: .utf8)
+        XCTAssertTrue(codex.contains("--morae-codex-relay"))
+        XCTAssertTrue(codex.contains("[features]"))
+        XCTAssertEqual(
+            try String(
+                contentsOf: codexURL.appendingPathExtension("morae-backup"),
+                encoding: .utf8
+            ),
+            originalCodex
+        )
+        let claudeData = try Data(contentsOf: claudeURL)
+        let claude = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: claudeData)
+                as? [String: Any]
+        )
+        XCTAssertNotNil(claude["permissions"])
+        XCTAssertTrue(
+            String(decoding: claudeData, as: UTF8.self)
+                .contains("/existing/stop-hook")
+        )
+
+        let codexBeforeSecondInstall = codex
+        try installer.install(.codex, sourceHelperURL: source)
+        XCTAssertEqual(
+            try String(contentsOf: codexURL, encoding: .utf8),
+            codexBeforeSecondInstall
+        )
+    }
+
+    func testAutomaticHookSetupDoesNotOverwriteInvalidClaudeJSON() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let home = root.appendingPathComponent("home", isDirectory: true)
+        let support = root.appendingPathComponent(
+            "support",
+            isDirectory: true
+        )
+        let source = root.appendingPathComponent("hamster-event")
+        let claudeDirectory = home.appendingPathComponent(
+            ".claude",
+            isDirectory: true
+        )
+        let claudeURL = claudeDirectory.appendingPathComponent(
+            "settings.json"
+        )
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(
+            at: claudeDirectory,
+            withIntermediateDirectories: true
+        )
+        try Data("helper".utf8).write(to: source)
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o755],
+            ofItemAtPath: source.path
+        )
+        let invalid = Data("{ invalid".utf8)
+        try invalid.write(to: claudeURL)
+        let installer = LiveAgentHookInstaller(
+            homeDirectoryURL: home,
+            applicationSupportURL: support
+        )
+
+        XCTAssertThrowsError(
+            try installer.install(.claude, sourceHelperURL: source)
+        )
+        XCTAssertEqual(try Data(contentsOf: claudeURL), invalid)
+    }
+
+    @MainActor
+    func testSettingsWindowMovesToActiveSpace() {
+        XCTAssertEqual(MoraeSettingsWindowController.title, "모래 설정")
+        XCTAssertTrue(
+            MoraeSettingsWindowController.collectionBehavior.contains(
+                .moveToActiveSpace
+            )
+        )
+        XCTAssertTrue(
+            MoraeSettingsWindowController.collectionBehavior.contains(
+                .fullScreenAuxiliary
+            )
+        )
     }
 
     func testDetailedNotificationCopyIsBoundedAndExplicitlyOptIn() {

@@ -21,11 +21,13 @@ public struct ArticleSelector: Sendable {
         interests: [String],
         readURLs: Set<URL>,
         recentlyRecommendedURLs: Set<URL>,
+        feedback: ArticleSelectionFeedback = .empty,
         now: Date
     ) throws -> FeedCandidate? {
+        let excludedURLs = try canonicalURLs(feedback.excludedURLs)
         let candidates = try deduplicator.deduplicate(
             candidates.filter { isEligible($0, now: now) }
-        )
+        ).filter { !excludedURLs.contains($0.articleURL) }
         guard !candidates.isEmpty else {
             return nil
         }
@@ -41,6 +43,7 @@ public struct ArticleSelector: Sendable {
                 interests: interests,
                 readURLs: readURLs,
                 recentURLs: recentURLs,
+                feedback: feedback,
                 suppressRecentPenalty: allRecentlyRecommended,
                 now: now
             )
@@ -49,6 +52,7 @@ public struct ArticleSelector: Sendable {
                 interests: interests,
                 readURLs: readURLs,
                 recentURLs: recentURLs,
+                feedback: feedback,
                 suppressRecentPenalty: allRecentlyRecommended,
                 now: now
             )
@@ -69,11 +73,13 @@ public struct ArticleSelector: Sendable {
         interests: [String],
         readURLs: Set<URL>,
         recentURLs: Set<URL>,
+        feedback: ArticleSelectionFeedback,
         suppressRecentPenalty: Bool,
         now: Date
     ) -> Int {
         return freshnessScore(candidate.publishedAt, now: now)
             + topicClassifier.classify(candidate.title).selectionScore
+            + feedbackScore(candidate, feedback: feedback)
             + interestScore(candidate.title, interests: interests)
             + (candidate.isOfficialSource ? 15 : 0)
             + min(max(candidate.selectionWeight, 0), 100)
@@ -82,6 +88,25 @@ public struct ArticleSelector: Sendable {
                 !suppressRecentPenalty
                     && recentURLs.contains(candidate.articleURL) ? 60 : 0
             )
+    }
+
+    private func feedbackScore(
+        _ candidate: FeedCandidate,
+        feedback: ArticleSelectionFeedback
+    ) -> Int {
+        let topic = topicClassifier.classify(candidate.title)
+        let topicScore = min(
+            max(feedback.preferredTopicCounts[topic, default: 0], 0) * 20,
+            60
+        )
+        let normalizedSource = candidate.sourceName
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        let sourceScore = min(
+            max(feedback.preferredSourceCounts[normalizedSource, default: 0], 0) * 10,
+            30
+        )
+        return topicScore + sourceScore
     }
 
     private func freshnessScore(_ publishedAt: Date?, now: Date) -> Int {

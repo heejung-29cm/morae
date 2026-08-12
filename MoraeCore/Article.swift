@@ -1,5 +1,29 @@
 import Foundation
 
+public enum ArticleFeedback: String, Codable, CaseIterable, Sendable {
+    case neutral
+    case notInterested = "not_interested"
+    case moreLikeThis = "more_like_this"
+}
+
+public struct ArticleSelectionFeedback: Equatable, Sendable {
+    public let excludedURLs: Set<URL>
+    public let preferredTopicCounts: [ArticleTopic: Int]
+    public let preferredSourceCounts: [String: Int]
+
+    public static let empty = ArticleSelectionFeedback()
+
+    public init(
+        excludedURLs: Set<URL> = [],
+        preferredTopicCounts: [ArticleTopic: Int] = [:],
+        preferredSourceCounts: [String: Int] = [:]
+    ) {
+        self.excludedURLs = excludedURLs
+        self.preferredTopicCounts = preferredTopicCounts
+        self.preferredSourceCounts = preferredSourceCounts
+    }
+}
+
 public struct FeedSource: Identifiable, Equatable, Sendable {
     public let id: UUID
     public let name: String
@@ -76,6 +100,8 @@ public struct Article: Identifiable, Equatable, Sendable {
     public var isLiked: Bool
     public let createdAt: Date
     public var updatedAt: Date
+    public var feedback: ArticleFeedback
+    public let topic: ArticleTopic
 
     public init(
         id: ArticleID,
@@ -87,7 +113,9 @@ public struct Article: Identifiable, Equatable, Sendable {
         isRead: Bool,
         isLiked: Bool,
         createdAt: Date,
-        updatedAt: Date
+        updatedAt: Date,
+        feedback: ArticleFeedback = .neutral,
+        topic: ArticleTopic = .other
     ) {
         self.id = id
         self.canonicalURL = canonicalURL
@@ -99,6 +127,8 @@ public struct Article: Identifiable, Equatable, Sendable {
         self.isLiked = isLiked
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.feedback = feedback
+        self.topic = topic
     }
 }
 

@@ -200,6 +200,55 @@ final class ArticleSelectorTests: XCTestCase {
         XCTAssertEqual(selected?.articleURL, preferred.articleURL)
     }
 
+    func testNotInterestedURLIsExcluded() throws {
+        let excluded = candidate(path: "excluded", ageInDays: 0)
+        let available = candidate(path: "available", ageInDays: 12)
+
+        let selected = try ArticleSelector().select(
+            from: [excluded, available],
+            interests: [],
+            readURLs: [],
+            recentlyRecommendedURLs: [],
+            feedback: ArticleSelectionFeedback(
+                excludedURLs: [excluded.articleURL]
+            ),
+            now: now
+        )
+
+        XCTAssertEqual(selected?.articleURL, available.articleURL)
+    }
+
+    func testPreferredTopicAndSourceBoostFutureSelection() throws {
+        let preferred = FeedCandidate(
+            sourceID: UUID(),
+            sourceName: "Frontend Weekly",
+            sourceURL: URL(string: "https://source.invalid/feed")!,
+            articleURL: URL(string: "https://example.com/preferred")!,
+            title: "Better code review collaboration",
+            publishedAt: now.addingTimeInterval(-14 * 86_400),
+            isOfficialSource: false
+        )
+        let fresh = candidate(
+            path: "fresh",
+            title: "Kubernetes infrastructure deployment",
+            ageInDays: 0
+        )
+
+        let selected = try ArticleSelector().select(
+            from: [fresh, preferred],
+            interests: [],
+            readURLs: [],
+            recentlyRecommendedURLs: [],
+            feedback: ArticleSelectionFeedback(
+                preferredTopicCounts: [.collaboration: 2],
+                preferredSourceCounts: ["frontend weekly": 2]
+            ),
+            now: now
+        )
+
+        XCTAssertEqual(selected?.articleURL, preferred.articleURL)
+    }
+
     private func candidate(
         path: String,
         title: String = "Article",

@@ -191,11 +191,13 @@ actor GenerateBriefing: BriefingGenerating {
             async let readURLs = articleRepository.readURLs()
             async let recentURLs = articleRepository
                 .previouslyRecommendedURLs()
+            async let feedback = articleRepository.feedbackSignals()
             guard let selected = try await selector.select(
                 from: feedResult.candidates,
                 interests: preferences.interests(),
                 readURLs: readURLs,
                 recentlyRecommendedURLs: recentURLs,
+                feedback: feedback,
                 now: startedAt
             ) else {
                 return await finishFailure(
@@ -218,7 +220,8 @@ actor GenerateBriefing: BriefingGenerating {
                 isRead: false,
                 isLiked: false,
                 createdAt: now,
-                updatedAt: now
+                updatedAt: now,
+                topic: ArticleTopicClassifier().classify(selected.title)
             )
             var succeeded = run
             succeeded.status = .succeeded

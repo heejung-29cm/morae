@@ -1,10 +1,11 @@
 # Sprint 5 Demo Checklist
 
 > 대상: 에이전트 이벤트 정규화·기록·알림
-> 최종 수정: 2026-07-30
+> 최종 수정: 2026-07-31
 
 Sprint 5는 앱 프로세스가 실행 중일 때 받은 Codex/Claude 이벤트를 턴별로
-저장하고 최근 기록, unread 메뉴 아이콘과 macOS 알림으로 표시합니다.
+저장하고 최근 기록, unread 메뉴 막대 햄스터 애니메이션과 macOS 알림으로
+표시합니다.
 앱이 꺼져 있을 때는 저장·재시도·spool하지 않습니다.
 
 ## 1. 자동 검증
@@ -30,8 +31,8 @@ xcodebuild test \
 
 - `MoraeCore`: 32개
 - `HamsterEventCLI`: 10개
-- `MoraeApp`: 79개
-- 합계 121개, 실패 0개
+- `MoraeApp`: 86개
+- 합계 128개, 실패 0개
 
 `testCodexAndClaudeFixturesRoundTripThroughSocket`은 production UDS
 client/server로 Codex 1개와 Claude 4단계 fixture를 보내 성공 ACK, 두 턴,
@@ -76,7 +77,7 @@ Sprint 6 전에는 helper가 앱 번들에 자동 포함되지 않으며 Codex/C
 기대 결과:
 
 - helper stdout/stderr 출력이 없습니다.
-- 메뉴 막대 모래 아이콘이 filled variant로 바뀝니다.
+- 메뉴 막대 햄스터가 6번 프레임에서 움직이는 애니메이션으로 바뀝니다.
 - 허용한 경우 Codex 응답 종료 알림이 두 번 표시됩니다.
 - 메뉴를 열면 `Codex` 그룹에 `응답 완료` 두 건이 최근 수신 순으로
   표시되고 unread 표시가 사라집니다.
@@ -113,7 +114,7 @@ printf '%s' \
 
 ## 5. 권한 거부와 개인정보 기본값
 
-- 알림을 거부해도 이벤트는 저장되고 메뉴 막대 filled 아이콘이 표시됩니다.
+- 알림을 거부해도 이벤트는 저장되고 메뉴 막대 햄스터가 움직입니다.
 - 거부 상태에서는 앱이 권한 요청을 반복하지 않고 에이전트 섹션에
   메뉴 막대 아이콘 fallback을 안내합니다.
 - Sprint 6 설정을 추가하기 전 기본값에서는 projectPath, 사용자 입력 제목과

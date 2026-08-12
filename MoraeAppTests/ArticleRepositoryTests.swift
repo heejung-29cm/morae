@@ -128,6 +128,62 @@ final class ArticleRepositoryTests: XCTestCase {
         XCTAssertEqual(previouslyRecommendedURLs, [recent.canonicalURL])
     }
 
+    func testFeedbackSignalsAndSavedArticlesPersist() async throws {
+        let database = try AppDatabase.inMemory()
+        let now = Date(unixMilliseconds: 2_000_000_000_000)
+        let repository = GRDBArticleRepository(
+            database: database,
+            clock: FixedClock(instant: now)
+        )
+        let excluded = article(
+            id: "20000000-0000-0000-0000-000000000006",
+            url: "https://example.com/excluded",
+            title: "Excluded",
+            isRead: false,
+            isLiked: false
+        )
+        let preferred = Article(
+            id: ArticleID(rawValue: UUID(uuidString:
+                "20000000-0000-0000-0000-000000000007")!),
+            canonicalURL: URL(string: "https://example.com/preferred")!,
+            title: "React patterns",
+            sourceName: "Frontend Weekly",
+            sourceURL: nil,
+            publishedAt: now,
+            isRead: false,
+            isLiked: false,
+            createdAt: now,
+            updatedAt: now,
+            topic: .aiAndFrontend
+        )
+        try await repository.upsert(excluded)
+        try await repository.upsert(preferred)
+
+        try await repository.setFeedback(
+            canonicalURL: excluded.canonicalURL,
+            feedback: .notInterested,
+            at: now
+        )
+        try await repository.setFeedback(
+            canonicalURL: preferred.canonicalURL,
+            feedback: .moreLikeThis,
+            at: now
+        )
+        try await repository.setLiked(
+            canonicalURL: preferred.canonicalURL,
+            isLiked: true,
+            at: now
+        )
+
+        let signals = try await repository.feedbackSignals()
+        XCTAssertEqual(signals.excludedURLs, [excluded.canonicalURL])
+        XCTAssertEqual(signals.preferredTopicCounts[.aiAndFrontend], 1)
+        XCTAssertEqual(signals.preferredSourceCounts["frontend weekly"], 1)
+        let saved = try await repository.savedArticles(limit: 5)
+        XCTAssertEqual(saved.map(\.canonicalURL), [preferred.canonicalURL])
+        XCTAssertEqual(saved.first?.feedback, .moreLikeThis)
+    }
+
     private func article(
         id: String,
         url: String,

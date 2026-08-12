@@ -22,7 +22,19 @@ protocol TodoRepository: Sendable {
         newIDs: [TodoID],
         at: Date
     ) async throws -> [TodoItem]
+    func importJira(
+        _ issues: [JiraIssueSnapshot],
+        day: LocalDay,
+        displayBaseURL: URL,
+        newIDs: [TodoID],
+        at: Date
+    ) async throws -> JiraTodoImportResult
     func observation(day: LocalDay) -> AsyncValueObservation<[TodoItem]>
+}
+
+struct JiraTodoImportResult: Equatable, Sendable {
+    let importedCount: Int
+    let refreshedCount: Int
 }
 
 enum TodoMappingError: Error, Equatable, Sendable {
@@ -31,6 +43,7 @@ enum TodoMappingError: Error, Equatable, Sendable {
     case invalidStatus(String)
     case invalidPriority(Int)
     case invalidURL(String)
+    case invalidExternalMetadata
     case invalidDomainValue(TodoValidationError)
 }
 
@@ -52,6 +65,14 @@ struct TodoRecord: Codable, FetchableRecord, PersistableRecord, TableRecord, Sen
     var relatedURL: String?
     var projectPath: String?
     var source: String
+    var externalProvider: String?
+    var externalID: String?
+    var externalKey: String?
+    var externalStatusCategory: String?
+    var externalStatusName: String?
+    var externalStartDay: String?
+    var externalDueDay: String?
+    var externalSyncedAtMs: Int64?
     var completedAtMs: Int64?
     let createdAtMs: Int64
     var updatedAtMs: Int64
@@ -67,13 +88,28 @@ struct TodoRecord: Codable, FetchableRecord, PersistableRecord, TableRecord, Sen
         case relatedURL = "related_url"
         case projectPath = "project_path"
         case source
+        case externalProvider = "external_provider"
+        case externalID = "external_id"
+        case externalKey = "external_key"
+        case externalStatusCategory = "external_status_category"
+        case externalStatusName = "external_status_name"
+        case externalStartDay = "external_start_day"
+        case externalDueDay = "external_due_day"
+        case externalSyncedAtMs = "external_synced_at_ms"
         case completedAtMs = "completed_at_ms"
         case createdAtMs = "created_at_ms"
         case updatedAtMs = "updated_at_ms"
     }
 
     init(item: TodoItem) {
-        self.init(item: item, source: "manual")
+        let source: String
+        switch item.origin {
+        case .manual, .jira:
+            source = item.origin.isJira ? "jira" : "manual"
+        case let .carryOver(sourceID):
+            source = "carryover:\(sourceID.storageValue)"
+        }
+        self.init(item: item, source: source)
     }
 
     init(item: TodoItem, source: String) {
@@ -87,6 +123,26 @@ struct TodoRecord: Codable, FetchableRecord, PersistableRecord, TableRecord, Sen
         relatedURL = item.relatedURL?.absoluteString
         projectPath = item.projectPath
         self.source = source
+        switch item.origin {
+        case let .jira(metadata):
+            externalProvider = "jira"
+            externalID = metadata.issueID
+            externalKey = metadata.issueKey
+            externalStatusCategory = metadata.statusCategory
+            externalStatusName = metadata.statusName
+            externalStartDay = metadata.startDay?.rawValue
+            externalDueDay = metadata.dueDay?.rawValue
+            externalSyncedAtMs = metadata.syncedAt.unixMilliseconds
+        case .manual, .carryOver:
+            externalProvider = nil
+            externalID = nil
+            externalKey = nil
+            externalStatusCategory = nil
+            externalStatusName = nil
+            externalStartDay = nil
+            externalDueDay = nil
+            externalSyncedAtMs = nil
+        }
         completedAtMs = item.completedAt?.unixMilliseconds
         createdAtMs = item.createdAt.unixMilliseconds
         updatedAtMs = item.updatedAt.unixMilliseconds
@@ -121,6 +177,63 @@ struct TodoRecord: Codable, FetchableRecord, PersistableRecord, TableRecord, Sen
             domainURL = nil
         }
 
+        let origin: TodoOrigin
+        if externalProvider == "jira" {
+            guard let externalID,
+                  let externalKey,
+                  let externalStatusCategory,
+                  let externalStatusName,
+                  let externalSyncedAtMs else {
+                throw TodoMappingError.invalidExternalMetadata
+            }
+            let startDay = try externalStartDay.map {
+                do {
+                    return try LocalDay(rawValue: $0)
+                } catch {
+                    throw TodoMappingError.invalidDay($0)
+                }
+            }
+            let dueDay = try externalDueDay.map {
+                do {
+                    return try LocalDay(rawValue: $0)
+                } catch {
+                    throw TodoMappingError.invalidDay($0)
+                }
+            }
+            origin = .jira(
+                JiraTodoMetadata(
+                    issueID: externalID,
+                    issueKey: externalKey,
+                    statusCategory: externalStatusCategory,
+                    statusName: externalStatusName,
+                    startDay: startDay,
+                    dueDay: dueDay,
+                    syncedAt: Date(unixMilliseconds: externalSyncedAtMs)
+                )
+            )
+        } else {
+            guard externalProvider == nil,
+                  externalID == nil,
+                  externalKey == nil,
+                  externalStatusCategory == nil,
+                  externalStatusName == nil,
+                  externalStartDay == nil,
+                  externalDueDay == nil,
+                  externalSyncedAtMs == nil else {
+                throw TodoMappingError.invalidExternalMetadata
+            }
+            if source.hasPrefix("carryover:"),
+               let sourceID = UUID(
+                uuidString: String(source.dropFirst("carryover:".count))
+               ) {
+                origin = .carryOver(
+                    sourceID: TodoID(rawValue: sourceID)
+                )
+            } else {
+                origin = .manual
+            }
+        }
+
         do {
             return try TodoItem(
                 id: TodoID(rawValue: rawID),
@@ -132,6 +245,7 @@ struct TodoRecord: Codable, FetchableRecord, PersistableRecord, TableRecord, Sen
                 estimatedMinutes: estimatedMinutes,
                 relatedURL: domainURL,
                 projectPath: projectPath,
+                origin: origin,
                 completedAt: completedAtMs.map(Date.init(unixMilliseconds:)),
                 createdAt: Date(unixMilliseconds: createdAtMs),
                 updatedAt: Date(unixMilliseconds: updatedAtMs)
@@ -219,6 +333,7 @@ final class GRDBTodoRepository: @unchecked Sendable {
                     FROM tasks AS source_task
                     WHERE source_task.task_day = ?
                       AND source_task.status = 'pending'
+                      AND source_task.external_provider IS NULL
                       AND NOT EXISTS (
                           SELECT 1
                           FROM tasks AS carried
@@ -238,6 +353,15 @@ final class GRDBTodoRepository: @unchecked Sendable {
 
     func insert(_ item: TodoItem) async throws {
         try await writer.write { database in
+            if case let .jira(metadata) = item.origin {
+                try database.execute(
+                    sql: """
+                        DELETE FROM jira_task_dismissals
+                        WHERE task_day = ? AND issue_id = ?
+                        """,
+                    arguments: [item.day.rawValue, metadata.issueID]
+                )
+            }
             try TodoRecord(item: item).insert(database)
         }
     }
@@ -273,7 +397,25 @@ final class GRDBTodoRepository: @unchecked Sendable {
 
     func delete(id: TodoID) async throws {
         try await writer.write { database in
-            _ = try TodoRecord.deleteOne(database, key: id.storageValue)
+            guard let record = try TodoRecord.fetchOne(
+                database,
+                key: id.storageValue
+            ) else {
+                return
+            }
+            if record.externalProvider == "jira",
+               let issueID = record.externalID {
+                try database.execute(
+                    sql: """
+                        INSERT OR IGNORE INTO jira_task_dismissals (
+                            task_day,
+                            issue_id
+                        ) VALUES (?, ?)
+                        """,
+                    arguments: [record.taskDay, issueID]
+                )
+            }
+            _ = try record.delete(database)
         }
     }
 
@@ -304,7 +446,7 @@ final class GRDBTodoRepository: @unchecked Sendable {
     }
 
     func carryOverPending(from: LocalDay, to: LocalDay) async throws {
-        let pending = try await list(day: from).filter { $0.status == .pending }
+        let pending = try await listCarryOverCandidates(from: from, to: to)
         _ = try await carryOverPending(
             from: from,
             to: to,
@@ -336,7 +478,9 @@ final class GRDBTodoRepository: @unchecked Sendable {
                 sql: """
                     SELECT *
                     FROM tasks
-                    WHERE task_day = ? AND status = 'pending'
+                    WHERE task_day = ?
+                      AND status = 'pending'
+                      AND external_provider IS NULL
                     ORDER BY sort_order ASC, created_at_ms ASC, id ASC
                     """,
                 arguments: [from.rawValue]
@@ -389,6 +533,7 @@ final class GRDBTodoRepository: @unchecked Sendable {
                         estimatedMinutes: source.estimatedMinutes,
                         relatedURL: source.relatedURL,
                         projectPath: source.projectPath,
+                        origin: .carryOver(sourceID: source.id),
                         createdAt: date,
                         updatedAt: date
                     )
@@ -399,6 +544,114 @@ final class GRDBTodoRepository: @unchecked Sendable {
                     .insert(database)
                     return copy
                 }
+        }
+    }
+
+    func importJira(
+        _ issues: [JiraIssueSnapshot],
+        day: LocalDay,
+        displayBaseURL: URL,
+        newIDs: [TodoID],
+        at date: Date
+    ) async throws -> JiraTodoImportResult {
+        guard issues.count == newIDs.count else {
+            throw TodoRepositoryError.reorderMismatch
+        }
+
+        var seenIssueIDs = Set<String>()
+        let uniquePairs = zip(issues, newIDs).filter {
+            seenIssueIDs.insert($0.0.issueID).inserted
+        }
+
+        return try await writer.write { database in
+            let dismissedIssueIDs = Set(
+                try String.fetchAll(
+                    database,
+                    sql: """
+                        SELECT issue_id
+                        FROM jira_task_dismissals
+                        WHERE task_day = ?
+                        """,
+                    arguments: [day.rawValue]
+                )
+            )
+            let existing = try TodoRecord.fetchAll(
+                database,
+                sql: """
+                    SELECT *
+                    FROM tasks
+                    WHERE task_day = ? AND external_provider = 'jira'
+                    """,
+                arguments: [day.rawValue]
+            )
+            let existingByExternalID = Dictionary(
+                uniqueKeysWithValues: existing.compactMap {
+                    record in
+                    record.externalID.map { ($0, record) }
+                }
+            )
+            var nextSortOrder = (
+                try Int.fetchOne(
+                    database,
+                    sql: "SELECT MAX(sort_order) FROM tasks WHERE task_day = ?",
+                    arguments: [day.rawValue]
+                ) ?? -1
+            ) + 1
+            var importedCount = 0
+            var refreshedCount = 0
+
+            for (issue, newID) in uniquePairs {
+                guard !dismissedIssueIDs.contains(issue.issueID) else {
+                    continue
+                }
+                let issueURL = displayBaseURL
+                    .appendingPathComponent("browse", isDirectory: true)
+                    .appendingPathComponent(issue.issueKey)
+                let metadata = JiraTodoMetadata(
+                    issueID: issue.issueID,
+                    issueKey: issue.issueKey,
+                    statusCategory: issue.statusCategory,
+                    statusName: issue.statusName,
+                    startDay: issue.startDay,
+                    dueDay: issue.dueDay,
+                    syncedAt: date
+                )
+                let normalizedTitle = String(issue.summary.prefix(200))
+
+                if var record = existingByExternalID[issue.issueID] {
+                    record.title = normalizedTitle
+                    record.relatedURL = issueURL.absoluteString
+                    record.externalKey = issue.issueKey
+                    record.externalStatusCategory = issue.statusCategory
+                    record.externalStatusName = issue.statusName
+                    record.externalStartDay = issue.startDay?.rawValue
+                    record.externalDueDay = issue.dueDay?.rawValue
+                    record.externalSyncedAtMs = date.unixMilliseconds
+                    record.updatedAtMs = date.unixMilliseconds
+                    try record.update(database)
+                    refreshedCount += 1
+                } else {
+                    let item = try TodoItem(
+                        id: newID,
+                        title: normalizedTitle,
+                        day: day,
+                        status: .pending,
+                        priority: .normal,
+                        sortOrder: nextSortOrder,
+                        relatedURL: issueURL,
+                        origin: .jira(metadata),
+                        createdAt: date,
+                        updatedAt: date
+                    )
+                    try TodoRecord(item: item).insert(database)
+                    nextSortOrder += 1
+                    importedCount += 1
+                }
+            }
+            return JiraTodoImportResult(
+                importedCount: importedCount,
+                refreshedCount: refreshedCount
+            )
         }
     }
 }

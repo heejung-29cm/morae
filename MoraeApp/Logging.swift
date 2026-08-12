@@ -9,6 +9,7 @@ enum MoraeLogCategory: String, CaseIterable, Sendable {
     case agentIPC = "agent-ipc"
     case agentNormalization = "agent-normalization"
     case notification
+    case jira
 }
 
 struct PublicLogToken: Equatable, Sendable, CustomStringConvertible {

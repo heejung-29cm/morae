@@ -1,7 +1,7 @@
 # 모래 High-Level Design
 
 > 상태: Accepted  
-> 최종 수정: 2026-07-30
+> 최종 수정: 2026-07-31
 > 대상: MVP  
 > 상위 요구사항: [README](../README.md)  
 > 상세 설계: [LLD](LLD.md)
@@ -32,7 +32,7 @@ MVP가 제공하는 사용자 가치는 다음 세 가지입니다.
 
 ### 2.2 MVP 제외
 
-- WidgetKit 위젯과 마스코트 애니메이션
+- WidgetKit 위젯과 별도 마스코트 오버레이
 - 예약 브리핑, 백그라운드 RSS 수집, 자동 재시도
 - AI 기반 아티클 요약과 아티클 원문 HTML 수집
 - 계정, 서버, 클라우드 동기화
@@ -44,10 +44,12 @@ MVP가 제공하는 사용자 가치는 다음 세 가지입니다.
 
 ### 2.3 현재 전달 상태
 
-Sprint 0부터 Sprint 5까지 구현됐습니다. 현재 실행 가능한 범위는
+Sprint 0부터 Sprint 8까지 구현됐습니다. 현재 실행 가능한 범위는
 메뉴 막대 앱 셸, GRDB/SQLite 영구 저장, 할 일
 CRUD·완료·재정렬·이월, 어제 완료 요약과 소프트 블루 기반 light/dark
-UI입니다. 아티클 영역은 기본 피드 seed, 제한된 HTTPS client, RSS/Atom
+UI입니다. 시스템 자정·시계·time zone 변경 시 오늘/어제 목록과 날짜별
+DB 관찰을 앱 재시작 없이 새 날짜로 전환합니다. 아티클 영역은 기본 피드
+seed, 제한된 HTTPS client, RSS/Atom
 메타데이터 파싱, URL 정규화·중복 제거·선정과 로컬 저장소까지
 구현됐습니다. 수동 브리핑은 사용자 버튼 동작에만 최대 4개 피드를
 조회하고 로컬 요약·추천 링크를 저장하며, 실패 시 자동 재시도하지 않고
@@ -56,13 +58,27 @@ UI입니다. 아티클 영역은 기본 피드 seed, 제한된 HTTPS client, RSS
 GeekNews와 Korean FE Article이며, 게시일이 있는 최근 30일의 개별 글만
 선정합니다. 제목 기반 AI·프론트엔드 ≫ 협업 > 인프라·데이터 순의
 주제 우선순위와 소스별 큐레이션 가중치를 점수에 반영합니다.
+첫 실행에는 버전형 5단계 온보딩을 현재 Space에 표시하고 설정에서 다시
+열 수 있습니다. 아티클의 명시적 제외·선호·저장 피드백은 로컬 DB에만
+보관하며 다음 수동 추천에 반영합니다.
 
 에이전트 IPC 전송 계층과 live handler가 구현됐습니다. 앱 프로세스 시작 시
 사용자 전용 UDS listener를 열고 Codex/Claude helper 입력을 검증한 뒤
 정규화·턴 연결·중복 억제·DB 저장이 성공해야 ACK합니다. 최근 20개 기록,
-unread 메뉴 아이콘, 사용자 동작 기반의 일반화된 macOS 알림과 90일 보존
-정리도 연결됐습니다. Hook 설정 UI와 배포는 Sprint 6 범위입니다.
+사용자 동작 기반의 일반화된 macOS 알림과 90일 보존 정리도 연결됐습니다.
+메뉴 막대 햄스터는 6번 프레임에서 쉬며 Claude 실행 중 또는 미확인
+Codex/Claude 기록이 있을 때만 움직입니다. 설정·Hook 스니펫·개인용 DMG
+배포까지 Sprint 6에서 구현됐습니다.
 앱 실행이나 메뉴 열기만으로 피드 네트워크 요청은 시작하지 않습니다.
+
+### 2.4 Jira Cloud 읽기 전용 연동
+
+Jira Cloud 읽기 전용 자동 가져오기는 Sprint 7의 as-built 범위입니다.
+[상세 설계](JIRA_INTEGRATION_DESIGN.md)와
+[ADR-0016](adr/0016-read-only-jira-daily-import.md)을 따릅니다.
+연결된 경우에만 앱 시작과 LocalDay 변경 시 날짜당 한 번 조회하며,
+설정의 수동 동기화는 별도 실행입니다. 기존 RSS/Atom 브리핑의 수동 실행
+정책은 바꾸지 않습니다.
 
 ## 3. 아키텍처 드라이버
 
@@ -71,7 +87,7 @@ unread 메뉴 아이콘, 사용자 동작 기반의 일반화된 macOS 알림과
 | 로컬 우선 | 사용자 데이터와 에이전트 이벤트는 로컬 DB에 저장하고 서버를 두지 않는다. |
 | 단순한 설치와 운영 | 하나의 `.app` 번들에 메뉴 막대 앱과 `hamster-event`를 포함한다. |
 | 추가 연동 비용 없음 | Codex App Server 대신 `notify`, Claude Code는 로컬 Hook을 사용한다. |
-| 명시적 네트워크 사용 | 사용자가 브리핑 버튼을 누를 때만 RSS/Atom 피드를 가져온다. |
+| 명시적 네트워크 사용 | 사용자가 아티클 추천받기 버튼을 누를 때만 RSS/Atom 피드를 가져온다. |
 | 개인정보 최소화 | 원본 에이전트 payload는 메모리에서 처리한 뒤 폐기하고 최소 메타데이터만 저장한다. |
 | 확장 가능한 로컬 구조 | MVP는 모듈형 모놀리스로 구현하되 향후 WidgetKit, 외부 연동, 내구성 있는 이벤트 수집을 추가할 수 있게 경계를 둔다. |
 
@@ -112,8 +128,11 @@ flowchart LR
 - 앱은 본인 전용 DMG로 만들고 로컬 실행용 서명(`Sign to Run Locally` 또는 ad-hoc)을 사용합니다.
 - Developer ID 서명과 공증은 MVP에서 하지 않으며 타인에게 배포해야 할 때 별도로 도입합니다.
 - App Store 배포와 App Sandbox는 MVP 범위에서 제외합니다.
-- 사용자는 온보딩에서 Codex와 Claude 설정 스니펫을 직접 복사해 붙여넣습니다.
-- 앱 이동으로 실행 파일 경로가 달라질 수 있으므로 설정 화면에서 현재 설치 경로와 설정 스니펫을 다시 확인할 수 있어야 합니다.
+- 사용자가 설정에서 명시적으로 자동 연결을 누르면 기존 Codex/Claude
+  설정을 백업하고 모래 항목만 병합합니다.
+- helper는 사용자 Application Support의 안정적인 경로에 설치해 앱 이동과
+  DMG 마운트 경로에 영향을 받지 않게 합니다. 자동 병합이 안전하지 않으면
+  파일을 변경하지 않고 직접 설정 스니펫을 제공합니다.
 - 로컬 저장소는 사용자 Application Support 디렉터리와 표준 `UserDefaults`를 사용합니다.
 - 향후 WidgetKit을 추가하면 App Group과 기존 데이터 이전을 별도 결정합니다.
 
@@ -157,8 +176,8 @@ flowchart TB
 
 | 컴포넌트 | 책임 |
 | --- | --- |
-| Menu Bar UI | 오늘 브리핑, 할 일, 최근 에이전트 기록과 미확인 상태 표시 |
-| Settings UI | 관심 분야, RSS 피드, 로그인 실행, 개인정보 옵션, Hook 설정 스니펫 관리 |
+| Menu Bar UI | 오늘의 아티클, 할 일, 최근 에이전트 기록과 미확인 상태 표시 |
+| Settings UI | 관심 분야, RSS 피드, 로그인 실행, 개인정보 옵션, Hook 자동 연결·직접 설정, Jira 인증 안내 |
 | Notification Router | 알림 선택 시 최근 에이전트 기록 목록을 연다. 2단계에서 상세 딥링크로 확장한다. |
 
 ### 6.2 Application Services
@@ -190,7 +209,7 @@ sequenceDiagram
     participant Feed as Feed Client
     participant DB as Local Store
 
-    User->>UI: 오늘 브리핑 만들기
+    User->>UI: 아티클 추천받기
     UI->>BO: generate(date, preferences)
     BO->>DB: 어제 완료 / 오늘 할 일 조회
     BO->>Feed: 등록 피드 1회 조회
@@ -204,7 +223,7 @@ sequenceDiagram
 
 - 사용자 동작 한 번당 브리핑 실행은 한 번입니다.
 - 피드 네트워크 오류가 발생해도 자동·수동 재시도 버튼을 제공하지 않습니다.
-- 다음 "오늘 브리핑 만들기" 동작은 새로운 실행입니다.
+- 다음 "아티클 추천받기" 동작은 새로운 실행입니다.
 - 할 일 요약은 항상 로컬에서 만들며 피드 실패와 독립적으로 표시합니다.
 - 동일 날짜에 여러 번 실행하면 최신 결과를 표시합니다. 이전 BriefingRun과 Article은 MVP에서 자동 삭제하지 않으며 앱 데이터 초기화 또는 후속 정리 정책 도입 전까지 유지합니다.
 
@@ -403,6 +422,14 @@ GRDB를 선택한 이유:
 - 아티클 링크는 사용자 선택 시 기본 브라우저에서 엽니다.
 - AI API와 외부 본문 추출 서비스는 사용하지 않습니다.
 
+### 10.3 로컬 피드백
+
+- `관심 없음`은 canonical URL을 이후 후보에서 제외합니다.
+- `이 주제 더 보기`는 메타데이터로 분류한 주제와 출처의 다음 추천
+  점수를 제한적으로 높입니다.
+- `나중에 읽기`는 최대 5개의 최근 저장 아티클을 메뉴에서 다시 엽니다.
+- 피드백은 서버나 분석 도구로 보내지 않고 로컬 SQLite에만 저장합니다.
+
 ## 11. 개인정보와 보안
 
 ### 11.1 에이전트 이벤트
@@ -515,6 +542,9 @@ MVP는 외부 분석 SDK를 사용하지 않습니다.
 | [ADR-0013](adr/0013-curated-first-article-sources.md) | 큐레이션 우선 아티클 소스와 선정 가중치 |
 | [ADR-0014](adr/0014-individual-article-recommendations.md) | 신선한 개별 아티클 중심 추천과 아티클 전용 UI |
 | [ADR-0015](adr/0015-metadata-topic-priority.md) | 메타데이터 기반 아티클 주제 우선순위 |
+| [ADR-0016](adr/0016-read-only-jira-daily-import.md) | 읽기 전용 Jira Cloud 날짜별 할 일 가져오기 |
+| [ADR-0017](adr/0017-safe-agent-hook-setup.md) | 기존 설정을 보존하는 에이전트 Hook 자동 연결 |
+| [ADR-0018](adr/0018-versioned-onboarding-and-local-article-feedback.md) | 버전형 첫 실행 온보딩과 로컬 아티클 피드백 |
 
 ## 18. 확정된 추가 결정
 

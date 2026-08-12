@@ -380,6 +380,68 @@ final class TodoRepositoryTests: XCTestCase {
     }
 
     @MainActor
+    func testValidationMessageExpiresAfterConfiguredDuration() async throws {
+        let viewModel = MenuBarViewModel(
+            repository: try GRDBTodoRepository(
+                database: AppDatabase.inMemory()
+            ),
+            clock: FixedClock(
+                instant: Date(unixMilliseconds: 1_775_040_000_000)
+            ),
+            calendar: Calendar(identifier: .gregorian),
+            validationMessageDuration: .milliseconds(20)
+        )
+
+        let addResult = await viewModel.addTodo(title: "  ")
+        XCTAssertFalse(addResult)
+        XCTAssertEqual(viewModel.validationMessage, "제목을 입력해 주세요.")
+
+        try await Task.sleep(for: .milliseconds(60))
+
+        XCTAssertNil(viewModel.validationMessage)
+    }
+
+    @MainActor
+    func testMenuBarViewModelCanDeleteAndUndoJiraTodo() async throws {
+        let database = try AppDatabase.inMemory()
+        let repository = GRDBTodoRepository(database: database)
+        let instant = Date(unixMilliseconds: 1_775_040_000_000)
+        let viewModel = MenuBarViewModel(
+            repository: repository,
+            clock: FixedClock(instant: instant),
+            calendar: Calendar(identifier: .gregorian)
+        )
+        let issue = JiraIssueSnapshot(
+            issueID: "20001",
+            issueKey: "TEAM-20",
+            summary: "Jira todo",
+            statusCategory: "indeterminate",
+            statusName: "In Progress",
+            startDay: viewModel.today,
+            dueDay: nil
+        )
+        _ = try await repository.importJira(
+            [issue],
+            day: viewModel.today,
+            displayBaseURL: URL(string: "https://team.example.com")!,
+            newIDs: [TodoID(rawValue: UUID())],
+            at: instant
+        )
+        await viewModel.onAppear()
+        let item = try XCTUnwrap(viewModel.todayTodos.first)
+
+        viewModel.requestDelete(id: item.id)
+        XCTAssertEqual(viewModel.deletionCandidate?.id, item.id)
+        await viewModel.confirmDelete()
+        XCTAssertTrue(viewModel.todayTodos.isEmpty)
+
+        await viewModel.undoDelete()
+        let restored = try await repository.list(day: viewModel.today)
+        XCTAssertEqual(viewModel.todayTodos.map(\.id), [item.id])
+        XCTAssertEqual(restored.count, 1)
+    }
+
+    @MainActor
     func testMenuBarViewModelReordersAndCarriesOverWithKeyboardPath() async throws {
         let database = try AppDatabase.inMemory()
         let repository = GRDBTodoRepository(database: database)
@@ -521,6 +583,88 @@ final class TodoRepositoryTests: XCTestCase {
     }
 
     @MainActor
+    func testMenuBarViewModelRefreshesListsAfterMidnightWithoutRestart() async throws {
+        let database = try AppDatabase.inMemory()
+        let repository = GRDBTodoRepository(database: database)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let beforeMidnight = try XCTUnwrap(
+            calendar.date(
+                from: DateComponents(
+                    timeZone: calendar.timeZone,
+                    year: 2026,
+                    month: 7,
+                    day: 30,
+                    hour: 23,
+                    minute: 59
+                )
+            )
+        )
+        let afterMidnight = try XCTUnwrap(
+            calendar.date(
+                from: DateComponents(
+                    timeZone: calendar.timeZone,
+                    year: 2026,
+                    month: 7,
+                    day: 31,
+                    minute: 1
+                )
+            )
+        )
+        let dayOne = try LocalDay(rawValue: "2026-07-30")
+        let dayTwo = try LocalDay(rawValue: "2026-07-31")
+        let completedYesterday = try makeTodo(
+            title: "Finished yesterday",
+            day: dayOne,
+            status: .completed,
+            sortOrder: 0
+        )
+        let pendingYesterday = try makeTodo(
+            title: "Carry yesterday",
+            day: dayOne,
+            sortOrder: 1
+        )
+        let pendingToday = try makeTodo(
+            title: "New day",
+            day: dayTwo,
+            sortOrder: 0
+        )
+        for item in [completedYesterday, pendingYesterday, pendingToday] {
+            try await repository.insert(item)
+        }
+
+        let clock = AdjustableClock(instant: beforeMidnight)
+        let viewModel = MenuBarViewModel(
+            repository: repository,
+            clock: clock,
+            calendar: calendar
+        )
+        defer { viewModel.onDisappear() }
+
+        await viewModel.onAppear()
+        XCTAssertEqual(viewModel.today, dayOne)
+        XCTAssertEqual(
+            viewModel.todayTodos.map(\.title),
+            ["Carry yesterday", "Finished yesterday"]
+        )
+
+        clock.set(afterMidnight)
+        await viewModel.refreshDayIfNeeded()
+
+        XCTAssertEqual(viewModel.today, dayTwo)
+        XCTAssertEqual(viewModel.yesterday, dayOne)
+        XCTAssertEqual(viewModel.todayTodos.map(\.title), ["New day"])
+        XCTAssertEqual(
+            viewModel.yesterdayCompleted.map(\.title),
+            ["Finished yesterday"]
+        )
+        XCTAssertEqual(
+            viewModel.yesterdayPending.map(\.title),
+            ["Carry yesterday"]
+        )
+    }
+
+    @MainActor
     func testDragDropPersistsExactlyOnceAndSkipsNoOp() async throws {
         let database = try AppDatabase.inMemory()
         let baseRepository = GRDBTodoRepository(database: database)
@@ -630,6 +774,22 @@ private final class CountingTodoRepository: TodoRepository, @unchecked Sendable 
             from: from,
             to: to,
             selectedIDs: selectedIDs,
+            newIDs: newIDs,
+            at: date
+        )
+    }
+
+    func importJira(
+        _ issues: [JiraIssueSnapshot],
+        day: LocalDay,
+        displayBaseURL: URL,
+        newIDs: [TodoID],
+        at date: Date
+    ) async throws -> JiraTodoImportResult {
+        try await base.importJira(
+            issues,
+            day: day,
+            displayBaseURL: displayBaseURL,
             newIDs: newIDs,
             at: date
         )

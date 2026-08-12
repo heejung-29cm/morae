@@ -27,13 +27,38 @@ enum BriefingViewState: Equatable, Sendable {
     }
 }
 
+enum AIReportViewState: Equatable, Sendable {
+    case idle(previous: AIReport?)
+    case loading(previous: AIReport?)
+    case success(AIReport)
+    case failure(code: AIReportErrorCode, previous: AIReport?)
+
+    var isLoading: Bool {
+        if case .loading = self {
+            return true
+        }
+        return false
+    }
+
+    var latestSuccess: AIReport? {
+        switch self {
+        case let .idle(previous), let .loading(previous):
+            previous
+        case let .success(report):
+            report
+        case let .failure(_, previous):
+            previous
+        }
+    }
+}
+
 extension BriefingErrorCode {
     var title: String {
         switch self {
         case .noEnabledFeeds: "사용 가능한 피드가 없습니다"
         case .noCandidates: "추천할 아티클이 없습니다"
         case .feedUnavailable: "피드를 불러오지 못했습니다"
-        case .persistenceFailed: "브리핑을 저장하지 못했습니다"
+        case .persistenceFailed: "추천 아티클을 저장하지 못했습니다"
         }
     }
 
@@ -53,13 +78,13 @@ extension BriefingErrorCode {
     var recovery: String {
         switch self {
         case .noEnabledFeeds:
-            "피드 설정을 확인한 뒤 다음 브리핑을 직접 실행할 수 있습니다."
+            "피드 설정을 확인한 뒤 아티클 추천을 다시 실행해 주세요."
         case .noCandidates:
-            "다음에 브리핑 버튼을 누르면 최신 피드를 다시 확인합니다."
+            "다음에 아티클 추천받기를 누르면 최신 피드를 다시 확인합니다."
         case .feedUnavailable:
             "이번 실행에서는 자동 재시도하지 않았습니다."
         case .persistenceFailed:
-            "앱을 다시 연 뒤 브리핑을 직접 실행해 주세요."
+            "앱을 다시 연 뒤 아티클 추천을 실행해 주세요."
         }
     }
 }
@@ -76,60 +101,115 @@ final class MenuBarViewModel {
     private(set) var deletionCandidate: TodoItem?
     private(set) var recentlyDeleted: TodoItem?
     private(set) var briefingState: BriefingViewState = .idle(previous: nil)
+    private(set) var aiReportState: AIReportViewState = .idle(previous: nil)
+    private(set) var savedArticles: [Article] = []
+    private(set) var jiraSyncMessage: String?
+    private(set) var isJiraConnected = false
+    private(set) var isJiraSyncing = false
 
-    let today: LocalDay
-    let yesterday: LocalDay
+    private(set) var today: LocalDay
+    private(set) var yesterday: LocalDay
 
     private let repository: (any TodoRepository)?
     private let briefingRepository: (any BriefingRepository)?
     private let briefingGenerator: (any BriefingGenerating)?
+    private let aiReportRepository: (any AIReportRepository)?
+    private let aiReportGenerator: (any AIReportGenerating)?
+    private let articleRepository: (any ArticleRepository)?
     private let clock: any Clock
     private let uuidGenerator: any UUIDGenerating
+    private let jiraIntegration: JiraIntegrationService?
     private let calendar: Calendar
     @ObservationIgnored
     nonisolated(unsafe) private var observationTask: Task<Void, Never>?
     @ObservationIgnored
     nonisolated(unsafe) private var undoExpirationTask: Task<Void, Never>?
+    @ObservationIgnored
+    nonisolated(unsafe) private var validationExpirationTask: Task<Void, Never>?
+    private let validationMessageDuration: Duration
     private var didLoadLatestBriefing = false
+    private var didLoadLatestAIReport = false
+    private var isRefreshingDay = false
+    private var dayRefreshRequested = false
 
     init(
         repository: (any TodoRepository)?,
         briefingRepository: (any BriefingRepository)? = nil,
         briefingGenerator: (any BriefingGenerating)? = nil,
+        aiReportRepository: (any AIReportRepository)? = nil,
+        aiReportGenerator: (any AIReportGenerating)? = nil,
+        articleRepository: (any ArticleRepository)? = nil,
         clock: any Clock,
         uuidGenerator: any UUIDGenerating = SystemUUIDGenerator(),
-        calendar: Calendar = .autoupdatingCurrent
+        calendar: Calendar = .autoupdatingCurrent,
+        jiraIntegration: JiraIntegrationService? = nil,
+        validationMessageDuration: Duration = .seconds(3)
     ) {
         self.repository = repository
         self.briefingRepository = briefingRepository
         self.briefingGenerator = briefingGenerator
+        self.aiReportRepository = aiReportRepository
+        self.aiReportGenerator = aiReportGenerator
+        self.articleRepository = articleRepository
         self.clock = clock
         self.uuidGenerator = uuidGenerator
         self.calendar = calendar
+        self.jiraIntegration = jiraIntegration
+        self.validationMessageDuration = validationMessageDuration
         let currentDay = clock.localDay(for: clock.now(), calendar: calendar)
         today = currentDay
         yesterday = Self.previousDay(of: currentDay, calendar: calendar)
     }
 
     func onAppear() async {
+        await refreshDayIfNeeded()
+    }
+
+    func refreshDayIfNeeded() async {
+        if isRefreshingDay {
+            dayRefreshRequested = true
+            return
+        }
+
+        isRefreshingDay = true
+        repeat {
+            dayRefreshRequested = false
+            await refreshCurrentDay()
+        } while dayRefreshRequested
+        isRefreshingDay = false
+    }
+
+    private func refreshCurrentDay() async {
+        let currentDay = clock.localDay(for: clock.now(), calendar: calendar)
+        if currentDay != today {
+            switchToDay(currentDay)
+        }
+
         await loadLatestBriefing()
+        await loadLatestAIReport()
+        await loadSavedArticles()
+        await refreshJiraConnectionState()
+        await syncJiraAutomatically(day: currentDay)
 
         guard observationTask == nil, let repository else {
             return
         }
 
+        let targetToday = today
+        let targetYesterday = yesterday
         do {
-            async let todayRequest = repository.list(day: today)
-            async let yesterdayRequest = repository.list(day: yesterday)
+            async let todayRequest = repository.list(day: targetToday)
+            async let yesterdayRequest = repository.list(day: targetYesterday)
             async let carryOverRequest = repository.listCarryOverCandidates(
-                from: yesterday,
-                to: today
+                from: targetYesterday,
+                to: targetToday
             )
             let (todayItems, yesterdayItems, carryOverItems) = try await (
                 todayRequest,
                 yesterdayRequest,
                 carryOverRequest
             )
+            guard today == targetToday else { return }
             todayTodos = todayItems
             yesterdayCompleted = yesterdayItems.filter { $0.status == .completed }
             yesterdayPending = carryOverItems
@@ -137,10 +217,12 @@ final class MenuBarViewModel {
             errorMessage = "할 일 요약을 불러오지 못했습니다."
         }
 
-        observationTask = Task { [weak self, repository, today] in
+        guard today == targetToday else { return }
+        observationTask = Task { [weak self, repository, targetToday] in
             do {
-                for try await items in repository.observation(day: today) {
+                for try await items in repository.observation(day: targetToday) {
                     guard !Task.isCancelled else { return }
+                    guard self?.today == targetToday else { return }
                     self?.todayTodos = items
                     self?.errorMessage = nil
                 }
@@ -152,9 +234,33 @@ final class MenuBarViewModel {
         }
     }
 
+    private func switchToDay(_ day: LocalDay) {
+        observationTask?.cancel()
+        observationTask = nil
+        undoExpirationTask?.cancel()
+        undoExpirationTask = nil
+        validationExpirationTask?.cancel()
+        validationExpirationTask = nil
+
+        today = day
+        yesterday = Self.previousDay(of: day, calendar: calendar)
+        todayTodos = []
+        yesterdayCompleted = []
+        yesterdayPending = []
+        selectedCarryOverIDs = []
+        deletionCandidate = nil
+        recentlyDeleted = nil
+        errorMessage = nil
+        validationMessage = nil
+        briefingState = .idle(previous: nil)
+        didLoadLatestBriefing = false
+        jiraSyncMessage = nil
+    }
+
     func onDisappear() {
         observationTask?.cancel()
         observationTask = nil
+        clearValidationMessage()
     }
 
     func generateBriefing() async {
@@ -179,6 +285,92 @@ final class MenuBarViewModel {
             return
         }
         await generateBriefing()
+    }
+
+    /// 어제 하루치 AI 활용 리포트를 요청한다. 오늘이 아니라 어제를 쓰는 이유는
+    /// 진행 중인 하루는 백분위 같은 비교 지표가 아직 확정되지 않기 때문이다.
+    func requestAIReport() async {
+        guard !aiReportState.isLoading, let aiReportGenerator else {
+            return
+        }
+        let previous = aiReportState.latestSuccess
+        aiReportState = .loading(previous: previous)
+
+        switch await aiReportGenerator.execute(day: yesterday) {
+        case let .generated(report):
+            aiReportState = .success(report)
+        case let .failed(_, code):
+            aiReportState = .failure(code: code, previous: previous)
+        case .alreadyRunning:
+            aiReportState = .idle(previous: previous)
+        }
+    }
+
+    func markArticleRead(_ article: Article) async {
+        guard let articleRepository else { return }
+        do {
+            try await articleRepository.setRead(
+                canonicalURL: article.canonicalURL,
+                isRead: true,
+                at: clock.now()
+            )
+        } catch {
+            errorMessage = "읽음 상태를 저장하지 못했습니다."
+        }
+    }
+
+    func toggleArticleSaved(_ article: Article) async {
+        guard let articleRepository else { return }
+        do {
+            try await articleRepository.setLiked(
+                canonicalURL: article.canonicalURL,
+                isLiked: !article.isLiked,
+                at: clock.now()
+            )
+            await reloadArticleState()
+        } catch {
+            errorMessage = "나중에 읽기 상태를 저장하지 못했습니다."
+        }
+    }
+
+    func toggleMoreLikeThis(_ article: Article) async {
+        let feedback: ArticleFeedback = article.feedback == .moreLikeThis
+            ? .neutral
+            : .moreLikeThis
+        await updateArticleFeedback(article, feedback: feedback)
+    }
+
+    func dismissArticle(_ article: Article) async {
+        guard let articleRepository else { return }
+        do {
+            try await articleRepository.setFeedback(
+                canonicalURL: article.canonicalURL,
+                feedback: .notInterested,
+                at: clock.now()
+            )
+            briefingState = .idle(previous: nil)
+            await loadSavedArticles()
+            await generateBriefing()
+        } catch {
+            errorMessage = "아티클 피드백을 저장하지 못했습니다."
+        }
+    }
+
+    private func updateArticleFeedback(
+        _ article: Article,
+        feedback: ArticleFeedback
+    ) async {
+        guard let articleRepository else { return }
+        do {
+            try await articleRepository.setFeedback(
+                canonicalURL: article.canonicalURL,
+                feedback: feedback,
+                at: clock.now()
+            )
+            await reloadArticleState()
+        } catch {
+            errorMessage = "아티클 피드백을 저장하지 못했습니다."
+        }
     }
 
     func toggleTodo(id: TodoID) async {
@@ -216,10 +408,10 @@ final class MenuBarViewModel {
             )
             try await repository.insert(item)
             todayTodos.append(item)
-            validationMessage = nil
+            clearValidationMessage()
             return true
         } catch let error as TodoValidationError {
-            validationMessage = validationText(for: error)
+            showValidationMessage(validationText(for: error))
             return false
         } catch {
             errorMessage = "할 일을 저장하지 못했습니다."
@@ -229,7 +421,8 @@ final class MenuBarViewModel {
 
     func updateTodo(_ draft: TodoEditDraft) async -> Bool {
         guard let repository,
-              let original = todayTodos.first(where: { $0.id == draft.id }) else {
+              let original = todayTodos.first(where: { $0.id == draft.id }),
+              !original.origin.isJira else {
             return false
         }
         do {
@@ -261,6 +454,7 @@ final class MenuBarViewModel {
                 estimatedMinutes: estimatedMinutes,
                 relatedURL: relatedURL,
                 projectPath: draft.projectPath.nilIfBlank,
+                origin: original.origin,
                 completedAt: original.completedAt,
                 createdAt: original.createdAt,
                 updatedAt: clock.now()
@@ -269,10 +463,10 @@ final class MenuBarViewModel {
             if let index = todayTodos.firstIndex(where: { $0.id == updated.id }) {
                 todayTodos[index] = updated
             }
-            validationMessage = nil
+            clearValidationMessage()
             return true
         } catch let error as TodoValidationError {
-            validationMessage = validationText(for: error)
+            showValidationMessage(validationText(for: error))
             return false
         } catch {
             errorMessage = "할 일을 수정하지 못했습니다."
@@ -281,7 +475,7 @@ final class MenuBarViewModel {
     }
 
     func requestDelete(id: TodoID) {
-        deletionCandidate = todayTodos.first(where: { $0.id == id })
+        deletionCandidate = todayTodos.first { $0.id == id }
     }
 
     func cancelDelete() {
@@ -289,7 +483,10 @@ final class MenuBarViewModel {
     }
 
     func confirmDelete() async {
-        guard let repository, let item = deletionCandidate else { return }
+        guard let repository,
+              let item = deletionCandidate else {
+            return
+        }
         do {
             try await repository.delete(id: item.id)
             todayTodos.removeAll(where: { $0.id == item.id })
@@ -315,7 +512,45 @@ final class MenuBarViewModel {
     }
 
     func clearValidationMessage() {
+        validationExpirationTask?.cancel()
+        validationExpirationTask = nil
         validationMessage = nil
+    }
+
+    func syncJiraNow() async {
+        guard let jiraIntegration, isJiraConnected, !isJiraSyncing else {
+            return
+        }
+        isJiraSyncing = true
+        jiraSyncMessage = nil
+        defer { isJiraSyncing = false }
+        do {
+            let result = try await jiraIntegration.sync(
+                day: today,
+                mode: .manual
+            )
+            jiraSyncMessage = result.importedCount == 0
+                ? "새 Jira 항목 없이 \(result.refreshedCount)개를 확인했습니다."
+                : "Jira에서 \(result.importedCount)개를 추가하고 \(result.refreshedCount)개를 갱신했습니다."
+        } catch JiraIntegrationError.notConnected {
+            isJiraConnected = false
+            jiraSyncMessage = "Jira 연결이 해제되었습니다. 설정에서 다시 연결해 주세요."
+        } catch {
+            jiraSyncMessage = (error as? LocalizedError)?.errorDescription
+                ?? "Jira 항목을 가져오지 못했습니다."
+        }
+    }
+
+    private func showValidationMessage(_ message: String) {
+        validationExpirationTask?.cancel()
+        validationMessage = message
+        validationExpirationTask = Task { [weak self] in
+            guard let self else { return }
+            try? await Task.sleep(for: validationMessageDuration)
+            guard !Task.isCancelled else { return }
+            validationMessage = nil
+            validationExpirationTask = nil
+        }
     }
 
     func movePending(id: TodoID, direction: TodoMoveDirection) async {
@@ -416,6 +651,34 @@ final class MenuBarViewModel {
         }
     }
 
+    /// 저장된 마지막 리포트를 복원한다. 리포트는 날짜별로 한 행만 유지되므로
+    /// 어제 것을 아직 받지 않았다면 그 이전 리포트가 그대로 남아 있다.
+    private func loadLatestAIReport() async {
+        guard !didLoadLatestAIReport else { return }
+        didLoadLatestAIReport = true
+        guard let aiReportRepository else { return }
+
+        do {
+            guard let report = try await aiReportRepository.latest() else {
+                aiReportState = .idle(previous: nil)
+                return
+            }
+            switch report.status {
+            case .succeeded:
+                aiReportState = .success(report)
+            case .failed:
+                aiReportState = .failure(
+                    code: report.errorCode ?? .scriptFailed,
+                    previous: nil
+                )
+            case .running:
+                aiReportState = .idle(previous: nil)
+            }
+        } catch {
+            aiReportState = .idle(previous: nil)
+        }
+    }
+
     private func loadLatestBriefing() async {
         guard !didLoadLatestBriefing else { return }
         didLoadLatestBriefing = true
@@ -469,6 +732,53 @@ final class MenuBarViewModel {
         }
     }
 
+    private func reloadArticleState() async {
+        didLoadLatestBriefing = false
+        await loadLatestBriefing()
+        await loadSavedArticles()
+    }
+
+    private func loadSavedArticles() async {
+        guard let articleRepository else { return }
+        do {
+            savedArticles = try await articleRepository.savedArticles(limit: 5)
+        } catch {
+            errorMessage = "저장한 아티클을 불러오지 못했습니다."
+        }
+    }
+
+    private func syncJiraAutomatically(day: LocalDay) async {
+        guard let jiraIntegration, isJiraConnected, !isJiraSyncing else {
+            return
+        }
+        isJiraSyncing = true
+        defer { isJiraSyncing = false }
+        do {
+            let result = try await jiraIntegration.sync(
+                day: day,
+                mode: .automatic
+            )
+            guard !result.skippedBecauseAlreadyAttempted else { return }
+            jiraSyncMessage = result.importedCount > 0
+                ? "Jira에서 \(result.importedCount)개를 추가했습니다."
+                : nil
+        } catch JiraIntegrationError.notConnected {
+            isJiraConnected = false
+            return
+        } catch {
+            jiraSyncMessage =
+                "Jira 자동 가져오기에 실패했습니다. Jira 버튼으로 다시 시도할 수 있습니다."
+        }
+    }
+
+    private func refreshJiraConnectionState() async {
+        guard let jiraIntegration else {
+            isJiraConnected = false
+            return
+        }
+        isJiraConnected = await jiraIntegration.snapshot().connection != nil
+    }
+
     private func validationText(for error: TodoValidationError) -> String {
         switch error {
         case .emptyTitle: "제목을 입력해 주세요."
@@ -501,6 +811,7 @@ final class MenuBarViewModel {
     deinit {
         observationTask?.cancel()
         undoExpirationTask?.cancel()
+        validationExpirationTask?.cancel()
     }
 }
 

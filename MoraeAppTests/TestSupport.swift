@@ -12,6 +12,25 @@ struct FixedClock: Clock {
     }
 }
 
+final class AdjustableClock: Clock, @unchecked Sendable {
+    private let lock = NSLock()
+    private var instant: Date
+
+    init(instant: Date) {
+        self.instant = instant
+    }
+
+    func now() -> Date {
+        lock.withLock { instant }
+    }
+
+    func set(_ instant: Date) {
+        lock.withLock {
+            self.instant = instant
+        }
+    }
+}
+
 struct FixedUUIDGenerator: UUIDGenerating {
     let uuid: UUID
 

@@ -244,13 +244,14 @@ final class GRDBBriefingRepository:
                 INSERT INTO articles (
                     id, canonical_url, title, source_name, source_url,
                     published_at_ms, is_read, is_liked,
-                    created_at_ms, updated_at_ms
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    created_at_ms, updated_at_ms, feedback, topic
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(canonical_url) DO UPDATE SET
                     title = excluded.title,
                     source_name = excluded.source_name,
                     source_url = excluded.source_url,
                     published_at_ms = excluded.published_at_ms,
+                    topic = excluded.topic,
                     updated_at_ms = excluded.updated_at_ms
                 """,
             arguments: [
@@ -264,6 +265,8 @@ final class GRDBBriefingRepository:
                 record.isLiked,
                 record.createdAtMs,
                 record.updatedAtMs,
+                record.feedback,
+                record.topic,
             ]
         )
     }

@@ -396,6 +396,10 @@ final class AgentFeatureTests: XCTestCase {
             model.hasUnread
         }
         XCTAssertTrue(hasUnreadBeforeOpening)
+        let animatesBeforeOpening = await MainActor.run {
+            model.shouldAnimateMenuBarIcon
+        }
+        XCTAssertTrue(animatesBeforeOpening)
 
         await MainActor.run {
             model.setVisible(true)
@@ -410,11 +414,59 @@ final class AgentFeatureTests: XCTestCase {
             model.hasUnread
         }
         XCTAssertFalse(hasUnreadAfterOpening)
+        let animatesAfterOpening = await MainActor.run {
+            model.shouldAnimateMenuBarIcon
+        }
+        XCTAssertFalse(animatesAfterOpening)
         let storedRuns = try await repository.recent(limit: 20)
         XCTAssertEqual(
             storedRuns.first?.isUnread,
             false
         )
+
+        _ = try await repository.apply(
+            event(
+                turnID: "active",
+                sourceEvent: "UserPromptSubmit",
+                component: "active-start",
+                status: .running,
+                starts: true
+            )
+        )
+        for _ in 0..<100 {
+            let isReadButRunning = await MainActor.run {
+                !model.hasUnread
+                    && model.runs.contains { $0.status == .running }
+            }
+            if isReadButRunning { break }
+            await Task.yield()
+        }
+        let animatesWhileRunning = await MainActor.run {
+            model.shouldAnimateMenuBarIcon
+        }
+        XCTAssertTrue(animatesWhileRunning)
+
+        _ = try await repository.apply(
+            event(
+                turnID: "active",
+                sourceEvent: "Stop",
+                component: "active-stop",
+                status: .responded,
+                closes: true
+            )
+        )
+        for _ in 0..<100 {
+            let hasStopped = await MainActor.run {
+                !model.hasUnread
+                    && !model.runs.contains { $0.status == .running }
+            }
+            if hasStopped { break }
+            await Task.yield()
+        }
+        let animatesAfterStop = await MainActor.run {
+            model.shouldAnimateMenuBarIcon
+        }
+        XCTAssertFalse(animatesAfterStop)
     }
 
     func testCodexAndClaudeFixturesRoundTripThroughSocket() async throws {

@@ -163,6 +163,24 @@ protocol LaunchAtLoginControlling: Sendable {
     func setEnabled(_ enabled: Bool) throws
 }
 
+final class InMemoryLaunchAtLoginController:
+    LaunchAtLoginControlling,
+    @unchecked Sendable
+{
+    private var enabled = false
+    private let lock = NSLock()
+
+    func isEnabled() -> Bool {
+        lock.withLock { enabled }
+    }
+
+    func setEnabled(_ enabled: Bool) throws {
+        lock.withLock {
+            self.enabled = enabled
+        }
+    }
+}
+
 struct SystemLaunchAtLoginController: LaunchAtLoginControlling {
     func isEnabled() -> Bool {
         SMAppService.mainApp.status == .enabled
@@ -265,6 +283,23 @@ final class SettingsModel {
     private(set) var feeds: [FeedSource] = []
     private(set) var notificationState:
         AgentNotificationAuthorizationState = .unknown
+    private(set) var hookStatuses: [
+        AgentHookProvider: AgentHookInstallStatus
+    ] = Dictionary(
+        uniqueKeysWithValues: AgentHookProvider.allCases.map {
+            ($0, .notInstalled)
+        }
+    )
+    private(set) var installingHook: AgentHookProvider?
+    private(set) var jiraSnapshot = JiraIntegrationSnapshot(
+        connection: nil,
+        lastAutomaticAttemptDay: nil,
+        lastSuccessfulSyncAt: nil
+    )
+    private(set) var jiraStartDateFields: [JiraFieldDefinition] = []
+    private(set) var jiraStatusMessage: String?
+    private(set) var jiraStatusIsError = false
+    private(set) var isJiraBusy = false
     private(set) var isBusy = false
     var errorMessage: String?
 
@@ -276,6 +311,8 @@ final class SettingsModel {
     private let launchAtLogin: any LaunchAtLoginControlling
     private let clock: any Clock
     private let uuidGenerator: any UUIDGenerating
+    private let jiraIntegration: JiraIntegrationService?
+    private let hookInstaller: any AgentHookInstalling
 
     init(
         store: any SettingsStoring,
@@ -286,7 +323,10 @@ final class SettingsModel {
         launchAtLogin: any LaunchAtLoginControlling =
             SystemLaunchAtLoginController(),
         clock: any Clock,
-        uuidGenerator: any UUIDGenerating
+        uuidGenerator: any UUIDGenerating,
+        jiraIntegration: JiraIntegrationService? = nil,
+        hookInstaller: any AgentHookInstalling =
+            LiveAgentHookInstaller()
     ) {
         self.store = store
         self.agentRepository = agentRepository
@@ -296,6 +336,8 @@ final class SettingsModel {
         self.launchAtLogin = launchAtLogin
         self.clock = clock
         self.uuidGenerator = uuidGenerator
+        self.jiraIntegration = jiraIntegration
+        self.hookInstaller = hookInstaller
         var loaded = store.load()
         loaded.launchAtLogin = launchAtLogin.isEnabled()
         settings = loaded
@@ -304,6 +346,117 @@ final class SettingsModel {
     func refresh() async {
         await refreshFeeds()
         await refreshNotifications()
+        await refreshJira()
+        refreshHooks()
+    }
+
+    func installHook(_ provider: AgentHookProvider) {
+        guard installingHook == nil else { return }
+        installingHook = provider
+        errorMessage = nil
+        defer { installingHook = nil }
+        do {
+            try hookInstaller.install(
+                provider,
+                sourceHelperURL: HookSnippetBuilder.helperURL()
+            )
+            refreshHooks()
+        } catch {
+            hookStatuses[provider] = .needsAttention(
+                (error as? LocalizedError)?.errorDescription
+                    ?? "자동 설정을 완료하지 못했습니다."
+            )
+        }
+    }
+
+    func installAllHooks() {
+        guard installingHook == nil else { return }
+        for provider in AgentHookProvider.allCases {
+            installHook(provider)
+        }
+    }
+
+    func connectJira(
+        siteURL: String,
+        email: String,
+        token: String,
+        startDateFieldID: String?
+    ) async -> Bool {
+        guard let jiraIntegration, !isJiraBusy else { return false }
+        isJiraBusy = true
+        jiraStatusMessage = nil
+        jiraStatusIsError = false
+        defer { isJiraBusy = false }
+        do {
+            let result = try await jiraIntegration.connect(
+                siteURLText: siteURL,
+                accountEmail: email,
+                token: token,
+                preferredStartDateFieldID: startDateFieldID
+            )
+            switch result {
+            case let .connected(connection):
+                jiraStartDateFields = []
+                jiraStatusMessage =
+                    "\(connection.displayBaseURL.host ?? "Jira") 연결을 완료했습니다."
+                await refreshJira()
+                return true
+            case let .requiresStartDateFieldSelection(fields):
+                jiraStartDateFields = fields
+                jiraStatusMessage =
+                    "가져오기에 사용할 시작 날짜 필드를 선택해 주세요."
+                return false
+            }
+        } catch {
+            jiraStatusIsError = true
+            jiraStatusMessage = (error as? LocalizedError)?.errorDescription
+                ?? "Jira 연결을 완료하지 못했습니다."
+            return false
+        }
+    }
+
+    func disconnectJira() async {
+        guard let jiraIntegration, !isJiraBusy else { return }
+        isJiraBusy = true
+        jiraStatusMessage = nil
+        jiraStatusIsError = false
+        defer { isJiraBusy = false }
+        do {
+            try await jiraIntegration.disconnect()
+            jiraStartDateFields = []
+            jiraStatusMessage = "Jira 연결을 해제했습니다."
+            await refreshJira()
+        } catch {
+            jiraStatusIsError = true
+            errorMessage = (error as? LocalizedError)?.errorDescription
+                ?? "Jira 연결을 해제하지 못했습니다."
+        }
+    }
+
+    func syncJiraNow() async {
+        guard let jiraIntegration, !isJiraBusy else { return }
+        isJiraBusy = true
+        jiraStatusMessage = nil
+        jiraStatusIsError = false
+        defer { isJiraBusy = false }
+        do {
+            let day = clock.localDay(
+                for: clock.now(),
+                calendar: .autoupdatingCurrent
+            )
+            let result = try await jiraIntegration.sync(
+                day: day,
+                mode: .manual
+            )
+            jiraStatusMessage = result.importedCount == 0
+                ? "새 항목 없이 \(result.refreshedCount)개를 확인했습니다."
+                : "\(result.importedCount)개를 추가하고 \(result.refreshedCount)개를 갱신했습니다."
+            await refreshJira()
+        } catch {
+            jiraStatusIsError = true
+            errorMessage = (error as? LocalizedError)?.errorDescription
+                ?? "Jira 항목을 가져오지 못했습니다."
+        }
     }
 
     func updateInterests(_ text: String) {
@@ -444,6 +597,17 @@ final class SettingsModel {
 
     private func refreshNotifications() async {
         notificationState = await notifier?.authorizationState() ?? .unknown
+    }
+
+    private func refreshJira() async {
+        guard let jiraIntegration else { return }
+        jiraSnapshot = await jiraIntegration.snapshot()
+    }
+
+    private func refreshHooks() {
+        for provider in AgentHookProvider.allCases {
+            hookStatuses[provider] = hookInstaller.status(for: provider)
+        }
     }
 }
 

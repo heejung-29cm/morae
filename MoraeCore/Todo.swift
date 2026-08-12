@@ -8,6 +8,47 @@ public enum TodoValidationError: Error, Equatable, Sendable {
     case invalidCompletionState
 }
 
+public struct JiraTodoMetadata: Equatable, Sendable {
+    public let issueID: String
+    public let issueKey: String
+    public let statusCategory: String
+    public let statusName: String
+    public let startDay: LocalDay?
+    public let dueDay: LocalDay?
+    public let syncedAt: Date
+
+    public init(
+        issueID: String,
+        issueKey: String,
+        statusCategory: String,
+        statusName: String,
+        startDay: LocalDay?,
+        dueDay: LocalDay?,
+        syncedAt: Date
+    ) {
+        self.issueID = issueID
+        self.issueKey = issueKey
+        self.statusCategory = statusCategory
+        self.statusName = statusName
+        self.startDay = startDay
+        self.dueDay = dueDay
+        self.syncedAt = syncedAt
+    }
+}
+
+public enum TodoOrigin: Equatable, Sendable {
+    case manual
+    case carryOver(sourceID: TodoID)
+    case jira(JiraTodoMetadata)
+
+    public var isJira: Bool {
+        if case .jira = self {
+            return true
+        }
+        return false
+    }
+}
+
 public struct TodoItem: Identifiable, Equatable, Sendable {
     public let id: TodoID
     public var title: String
@@ -18,6 +59,7 @@ public struct TodoItem: Identifiable, Equatable, Sendable {
     public var estimatedMinutes: Int?
     public var relatedURL: URL?
     public var projectPath: String?
+    public var origin: TodoOrigin
     public var completedAt: Date?
     public let createdAt: Date
     public var updatedAt: Date
@@ -32,6 +74,7 @@ public struct TodoItem: Identifiable, Equatable, Sendable {
         estimatedMinutes: Int? = nil,
         relatedURL: URL? = nil,
         projectPath: String? = nil,
+        origin: TodoOrigin = .manual,
         completedAt: Date? = nil,
         createdAt: Date,
         updatedAt: Date
@@ -67,6 +110,7 @@ public struct TodoItem: Identifiable, Equatable, Sendable {
         self.estimatedMinutes = estimatedMinutes
         self.relatedURL = relatedURL
         self.projectPath = projectPath
+        self.origin = origin
         self.completedAt = completedAt
         self.createdAt = createdAt
         self.updatedAt = updatedAt

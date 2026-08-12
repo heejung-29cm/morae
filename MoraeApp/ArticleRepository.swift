@@ -5,6 +5,8 @@ import MoraeCore
 protocol ArticleRepository: Sendable {
     func previouslyRecommendedURLs() async throws -> Set<URL>
     func readURLs() async throws -> Set<URL>
+    func feedbackSignals() async throws -> ArticleSelectionFeedback
+    func savedArticles(limit: Int) async throws -> [Article]
     func upsert(_ article: Article) async throws
     func find(canonicalURL: URL) async throws -> Article?
     func setRead(
@@ -17,12 +19,19 @@ protocol ArticleRepository: Sendable {
         isLiked: Bool,
         at: Date
     ) async throws
+    func setFeedback(
+        canonicalURL: URL,
+        feedback: ArticleFeedback,
+        at: Date
+    ) async throws
 }
 
 enum ArticleMappingError: Error, Equatable, Sendable {
     case invalidID(String)
     case invalidCanonicalURL(String)
     case invalidSourceURL(String)
+    case invalidFeedback(String)
+    case invalidTopic(String)
 }
 
 struct ArticleRecord:
@@ -44,6 +53,8 @@ struct ArticleRecord:
     let isLiked: Bool
     let createdAtMs: Int64
     let updatedAtMs: Int64
+    let feedback: String
+    let topic: String
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -56,6 +67,8 @@ struct ArticleRecord:
         case isLiked = "is_liked"
         case createdAtMs = "created_at_ms"
         case updatedAtMs = "updated_at_ms"
+        case feedback
+        case topic
     }
 
     init(article: Article, canonicalURL: URL) {
@@ -69,6 +82,8 @@ struct ArticleRecord:
         isLiked = article.isLiked
         createdAtMs = article.createdAt.unixMilliseconds
         updatedAtMs = article.updatedAt.unixMilliseconds
+        feedback = article.feedback.rawValue
+        topic = article.topic.rawValue
     }
 
     func domain() throws -> Article {
@@ -87,6 +102,12 @@ struct ArticleRecord:
         } else {
             parsedSourceURL = nil
         }
+        guard let feedback = ArticleFeedback(rawValue: feedback) else {
+            throw ArticleMappingError.invalidFeedback(self.feedback)
+        }
+        guard let topic = ArticleTopic(rawValue: topic) else {
+            throw ArticleMappingError.invalidTopic(self.topic)
+        }
         return Article(
             id: ArticleID(rawValue: id),
             canonicalURL: canonicalURL,
@@ -97,7 +118,9 @@ struct ArticleRecord:
             isRead: isRead,
             isLiked: isLiked,
             createdAt: Date(unixMilliseconds: createdAtMs),
-            updatedAt: Date(unixMilliseconds: updatedAtMs)
+            updatedAt: Date(unixMilliseconds: updatedAtMs),
+            feedback: feedback,
+            topic: topic
         )
     }
 }
@@ -152,6 +175,62 @@ final class GRDBArticleRepository: ArticleRepository, @unchecked Sendable {
         }
     }
 
+    func feedbackSignals() async throws -> ArticleSelectionFeedback {
+        try await writer.read { database in
+            let excludedValues = try String.fetchAll(
+                database,
+                sql: """
+                    SELECT canonical_url FROM articles
+                    WHERE feedback = 'not_interested'
+                    """
+            )
+            let rows = try Row.fetchAll(
+                database,
+                sql: """
+                    SELECT topic, source_name FROM articles
+                    WHERE feedback = 'more_like_this'
+                    """
+            )
+            var topics: [ArticleTopic: Int] = [:]
+            var sources: [String: Int] = [:]
+            for row in rows {
+                if let value: String = row["topic"],
+                   let topic = ArticleTopic(rawValue: value) {
+                    topics[topic, default: 0] += 1
+                }
+                if let value: String = row["source_name"] {
+                    let source = value
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                        .lowercased()
+                    if !source.isEmpty {
+                        sources[source, default: 0] += 1
+                    }
+                }
+            }
+            return ArticleSelectionFeedback(
+                excludedURLs: Set(excludedValues.compactMap(URL.init(string:))),
+                preferredTopicCounts: topics,
+                preferredSourceCounts: sources
+            )
+        }
+    }
+
+    func savedArticles(limit: Int) async throws -> [Article] {
+        guard limit > 0 else { return [] }
+        return try await writer.read { database in
+            try ArticleRecord.fetchAll(
+                database,
+                sql: """
+                    SELECT * FROM articles
+                    WHERE is_liked = 1
+                    ORDER BY updated_at_ms DESC, id DESC
+                    LIMIT ?
+                    """,
+                arguments: [limit]
+            ).map { try $0.domain() }
+        }
+    }
+
     func upsert(_ article: Article) async throws {
         let canonicalURL = try canonicalizer.canonicalize(
             article.canonicalURL
@@ -166,8 +245,8 @@ final class GRDBArticleRepository: ArticleRepository, @unchecked Sendable {
                     INSERT INTO articles (
                         id, canonical_url, title, source_name, source_url,
                         published_at_ms, is_read, is_liked,
-                        created_at_ms, updated_at_ms
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        created_at_ms, updated_at_ms, feedback, topic
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(canonical_url) DO UPDATE SET
                         title = excluded.title,
                         source_name = excluded.source_name,
@@ -175,6 +254,8 @@ final class GRDBArticleRepository: ArticleRepository, @unchecked Sendable {
                         published_at_ms = excluded.published_at_ms,
                         is_read = excluded.is_read,
                         is_liked = excluded.is_liked,
+                        feedback = excluded.feedback,
+                        topic = excluded.topic,
                         updated_at_ms = excluded.updated_at_ms
                     """,
                 arguments: [
@@ -188,6 +269,8 @@ final class GRDBArticleRepository: ArticleRepository, @unchecked Sendable {
                     record.isLiked,
                     record.createdAtMs,
                     record.updatedAtMs,
+                    record.feedback,
+                    record.topic,
                 ]
             )
         }
@@ -229,6 +312,28 @@ final class GRDBArticleRepository: ArticleRepository, @unchecked Sendable {
             canonicalURL: canonicalURL,
             at: date
         )
+    }
+
+    func setFeedback(
+        canonicalURL: URL,
+        feedback: ArticleFeedback,
+        at date: Date
+    ) async throws {
+        let canonicalURL = try canonicalizer.canonicalize(canonicalURL)
+        try await writer.write { database in
+            try database.execute(
+                sql: """
+                    UPDATE articles
+                    SET feedback = ?, updated_at_ms = ?
+                    WHERE canonical_url = ?
+                    """,
+                arguments: [
+                    feedback.rawValue,
+                    date.unixMilliseconds,
+                    canonicalURL.absoluteString,
+                ]
+            )
+        }
     }
 
     private func updateFlag(

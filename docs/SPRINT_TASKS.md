@@ -1,6 +1,6 @@
 # 모래 MVP Sprint Tasks
 
-> 상태: Sprint 0~6 완료
+> 상태: Sprint 0~7 완료
 > 최종 수정: 2026-07-30
 > 기준 문서: [README](../README.md), [HLD](HLD.md), [LLD](LLD.md), [ADR](adr/)
 
@@ -86,11 +86,13 @@ Sprint 종료 데모:
 | S1-10 | M | 할 일 목록 관찰과 완료 UI | S1-04, S1-09 | GRDB 변경이 목록에 반영되고 체크 동작, 중요 표시와 예상 시간이 올바르게 보입니다. |
 | S1-11 | M | 할 일 추가·편집·삭제 UI | S1-03, S1-05, S1-10 | validation, 저장, 취소, 삭제 확인 흐름을 UI test로 검증합니다. |
 | S1-12 | S | 순서 변경과 미완료 가져오기 UI | S1-06, S1-07, S1-10 | pointer reorder와 keyboard 이동이 동작하고, 가져온 항목은 즉시 후보에서 사라지며 재시작 후에도 제외됩니다. |
+| S1-13 | S | 실행 중 날짜·time zone 롤오버 | S1-08, S1-10 | 메뉴 표시와 시스템 날짜·시계·time zone 변경 시 현재 `LocalDay`를 재확인하고, 변경되면 오늘/어제 목록과 GRDB observation을 재시작합니다. |
 
 Sprint 종료 데모:
 
 - 할 일을 추가·수정·완료·삭제·재정렬할 수 있습니다.
-- 다음 날짜로 Clock을 이동하면 완료 항목이 “어제 한 일”에 나타납니다.
+- 앱을 종료하지 않고 다음 날짜로 Clock을 이동하면 완료 항목이 “어제 한
+  일”에 나타나고 이전 날짜 항목은 오늘 목록에서 제거됩니다.
 - 앱을 재실행해도 데이터가 유지됩니다.
 
 ## 3.1 Sprint 1.5 — 메뉴 막대 UI Polish
@@ -176,7 +178,7 @@ Sprint 종료 데모:
 - S3-01~S3-07을 task별 커밋으로 구현하고 현재 브랜치에 푸시했습니다.
 - 피드별 요청 1회, 최대 4개 동시 조회, 부분·전체 실패와 loading 중 중복
   trigger 차단을 자동화 테스트로 검증합니다.
-- 브리핑 버튼은 별도 질문 없이 실행되고 할 일을 추가하지 않음을
+- 아티클 추천받기 버튼은 별도 질문 없이 실행되고 할 일을 추가하지 않음을
   검증합니다.
 - 임시 DB를 닫고 다시 여는 통합 테스트에서 실행당 run 한 건과 최신
   브리핑 복원을 검증합니다.
@@ -256,7 +258,7 @@ Sprint 종료 데모:
 | S5-08 | S | 에이전트 기록 목록 ViewModel | S5-05 | 최근 수신 순, projectPath 그룹, unread 상태를 관찰하고 privacy off에서도 동작합니다. |
 | S5-09 | M | 에이전트 기록 메뉴 UI | S5-08, S1-09 | source와 상태를 표시하고 responded/complete 문구·색상을 구분하며 generic row fallback이 있습니다. |
 | S5-10 | S | macOS notification adapter | S5-06 | 기본 알림은 source/status만 포함하고 동일 turn의 중복 종료 알림을 보내지 않습니다. |
-| S5-11 | S | 알림 권한 거부와 unread dot | S5-09, S5-10 | 거부·비활성 상태에서 메뉴 막대 dot가 나타나고 목록 확인 시 읽음 처리됩니다. |
+| S5-11 | S | 알림 권한 거부와 unread 마스코트 | S5-09, S5-10 | 거부·비활성 상태에서도 미확인 기록이 있으면 메뉴 막대 햄스터가 움직이고 목록 확인 시 읽음 처리됩니다. |
 | S5-12 | S | Codex·Claude fixture E2E 테스트 | S5-06, S5-10 | 지원 event는 기대 turn/status로 한 번 저장·알림되고 비대상 Notification은 저장 전에 거부됩니다. |
 
 Sprint 종료 데모:
@@ -270,9 +272,11 @@ Sprint 종료 데모:
 - S5-01~S5-12를 구현하고 live UDS handler에 연결했습니다.
 - Codex/Claude fixture를 production client/server로 전송해 ACK, 턴별
   저장, eventKey 중복 억제와 알림 횟수를 함께 검증합니다.
-- 최근 20개 기록과 unread 메뉴 아이콘은 GRDB observation으로 갱신되며,
-  메뉴를 열면 읽음 처리됩니다.
-- 알림 권한을 거부해도 unread 아이콘은 유지되고 권한 요청을 반복하지
+- 최근 20개 기록과 메뉴 막대 햄스터 상태는 GRDB observation으로
+  갱신되며, 메뉴를 열면 읽음 처리됩니다. 정지 상태와 앱 아이콘은 GIF의
+  6번 프레임을 사용하고 Claude 실행 중 또는 미확인 기록이 있을 때만
+  애니메이션을 재생합니다.
+- 알림 권한을 거부해도 unread 애니메이션은 유지되고 권한 요청을 반복하지
   않습니다. 개인정보 필드는 기본적으로 저장하지 않습니다.
 - 직접 확인은 [Sprint 5 데모 체크리스트](SPRINT_5_DEMO_CHECKLIST.md)를
   따릅니다.
@@ -289,7 +293,7 @@ Sprint 종료 데모:
 | S6-04 | S | 상세 알림 opt-in 적용 | S5-10, S6-01 | 기본 generic 알림과 명시적 opt-in 상세 알림을 구분하고 잠금 화면 노출 주의를 표시합니다. |
 | S6-05 | M | 설정 화면 기본 섹션 구현 | S6-01 | 관심사, 피드, 개인정보, 알림 권한, 로그인 실행 상태를 분리해 편집할 수 있습니다. |
 | S6-06 | S | 사용자 RSS/Atom 피드 관리 UI | S2-01, S6-05 | HTTPS URL 추가, 활성화, 삭제, 중복 URL validation과 파싱 실패 메시지가 동작합니다. |
-| S6-07 | S | Codex·Claude 설정 snippet UI | S4-04, S6-05 | 확정 CLI 경로와 subcommand가 포함된 snippet을 복사할 수 있고 외부 설정 파일을 수정하지 않으며 Claude Code 2.1.198 미만에는 호환성 안내를 표시합니다. |
+| S6-07 | S | Codex·Claude 설정 snippet UI | S4-04, S6-05 | 확정 CLI 경로와 subcommand가 포함된 직접 설정 fallback을 제공하고 Claude Code 2.1.198 미만에는 호환성 안내를 표시합니다. 자동 병합은 DX-01에서 추가했습니다. |
 | S6-08 | S | 로그인 시 실행 설정 | S6-01, S6-05 | 기본 off, 사용자 toggle에 의한 등록/해제와 실패 안내를 검증합니다. |
 | S6-09 | S | 알림 설정 안내와 시스템 설정 이동 | S5-11, S6-05 | 권한 상태를 표시하고 거부 시 사용자가 System Settings에서 복구할 경로를 제공합니다. |
 | S6-10 | M | 접근성·keyboard·VoiceOver 점검 | S3-05, S5-09, S6-05 | 주요 버튼/상태 label, focus 순서, 색상 외 상태 문구, keyboard 조작을 UI test와 수동 점검으로 확인합니다. |
@@ -312,11 +316,61 @@ Sprint 종료 데모:
   transaction에서 `NULL`로 scrub합니다. 기본 알림은 일반 문구만 쓰고
   상세 알림은 명시적 opt-in과 길이 제한을 적용합니다.
 - 앱 타깃이 `hamster-event`를 번들 실행 파일로 포함하고 현재 앱 경로가
-  들어간 Codex/Claude snippet만 제공합니다. 외부 설정 파일은 수정하지
-  않습니다.
+  들어간 Codex/Claude snippet을 제공합니다. 이후 DX-01에서 사용자
+  동작으로만 실행되는 백업·병합 방식의 자동 설정을 추가했습니다.
 - S6-11~S6-13의 자동 검증과 수동 설치 절차는
   [Sprint 6 데모 체크리스트](SPRINT_6_DEMO_CHECKLIST.md)에 기록했고,
   `scripts/build-personal-dmg.sh`가 로컬 서명 DMG를 생성합니다.
+
+## 8.1 Sprint 7 — Jira Cloud 읽기 전용 가져오기
+
+목표: 현재 사용자의 진행 중 또는 시작일·기한이 도래한 Jira 이슈를
+날짜별 오늘 할 일로 안전하게 가져옵니다.
+
+| ID | 크기 | 태스크 | 완료·검토 기준 |
+| --- | --- | --- | --- |
+| S7-01 | S | Jira 출처 Todo domain 추가 | manual/carry-over/Jira를 구분하고 Jira issue ID·key·상태·날짜를 표현합니다. |
+| S7-02 | M | DB v5 migration | 외부 provider/ID metadata column과 날짜별 unique index를 추가합니다. |
+| S7-03 | M | Jira Cloud discovery·인증 client | `serverInfo`, `myself`, `field`를 10초·2 MiB 제한과 무재시도로 호출합니다. |
+| S7-04 | S | API token Keychain 저장 | `afterFirstUnlockThisDeviceOnly` generic password로 저장·조회·삭제합니다. |
+| S7-05 | S | 시작 날짜 field resolver와 고정 JQL | 검색 가능한 date custom field만 허용하고 숫자 ID와 LocalDay만 JQL에 넣으며 Epic·Initiative·Hold·Backlog를 제외합니다. |
+| S7-06 | M | enhanced JQL pagination | 페이지당 50개, 전체 200개 상한으로 후보를 조회하고 초과 시 반영하지 않습니다. |
+| S7-07 | M | 날짜별 idempotent import | 같은 날짜 Jira issue는 metadata만 갱신하고 로컬 완료·중요도·순서를 보존합니다. |
+| S7-08 | S | carry-over 분리 | Jira Todo를 어제 미완료 수동 가져오기에서 제외하고 다음 날짜에 다시 평가합니다. |
+| S7-09 | M | 설정 연결 UI | 사이트·이메일·토큰 입력, 모호한 시작 날짜 field 선택, 연결·해제·마지막 성공을 제공합니다. |
+| S7-10 | S | 자동·수동 실행 정책 | 앱 시작/날짜 변경은 LocalDay당 한 번, 설정의 수동 실행은 별도로 허용합니다. |
+| S7-11 | S | 메뉴 Jira 표시 | issue key·상태·D+n과 원문 링크를 표시하고 Jira metadata 편집을 막습니다. |
+| S7-12 | M | 회귀·보안 테스트 | JQL injection 거부, 동일 날짜 중복 방지, 완료 보존, 다음 날짜 생성, 이월 제외를 검증합니다. |
+| S7-13 | S | Jira Todo 날짜별 삭제 | Jira Todo 삭제·undo를 허용하고 v6 dismissal로 같은 날 재동기화 시 재생성을 막습니다. |
+| S7-14 | S | 메뉴 Jira 수동 동기화 | 연결된 경우 오늘 할 일 header의 소프트 블루 아이콘으로 한 번 동기화하고 실행 중 중복 요청을 막으며 결과를 inline으로 표시합니다. |
+
+구현 결과(2026-07-31):
+
+- S7-01~S7-14를 구현했습니다.
+- Jira는 읽기 전용이며 API token은 Keychain에만 저장됩니다.
+- 자동 실행은 실패를 포함해 날짜당 한 번만 claim하고 자동 재시도하지
+  않습니다. 사용자가 누르는 `지금 가져오기`는 별도 실행입니다.
+- 전체 Xcode test suite에서 Jira 신규 테스트와 기존 회귀 테스트를 함께
+  실행합니다.
+
+## 8.3 Sprint 8 — 첫 실행 온보딩과 아티클 피드백
+
+목표: 처음 설치한 사용자가 핵심 연동을 한 흐름에서 이해하고, 명시적
+피드백으로 다음 아티클 추천을 로컬에서 개선합니다.
+
+| ID | 크기 | 태스크 | 완료·검토 기준 |
+| --- | --- | --- | --- |
+| S8-01 | S | 버전형 온보딩 상태 | UserDefaults에 완료 버전을 저장하고 테스트 프로필과 분리합니다. |
+| S8-02 | M | 첫 실행 창 흐름 | 환영·관심사·에이전트/알림·선택적 Jira·완료를 현재 Space에 표시합니다. |
+| S8-03 | S | 온보딩 다시 보기 | 일반 설정에서 완료 여부와 무관하게 같은 창을 엽니다. |
+| S8-04 | S | DB v7 피드백 migration | feedback·topic과 조회 index를 기존 DB에 추가합니다. |
+| S8-05 | S | 피드백 저장소 | 제외 URL, 선호 주제/출처, 최근 저장 아티클을 로컬에서 조회합니다. |
+| S8-06 | M | 추천 점수 반영 | 관심 없음은 제외하고 선호 주제·출처에는 상한이 있는 가중치를 더합니다. |
+| S8-07 | M | 아티클 카드 액션 | 관심 없음·이 주제 더 보기·나중에 읽기와 저장 목록을 메뉴에 제공합니다. |
+| S8-08 | S | 자동 테스트·문서 | migration, 저장, 점수, 완료 상태 회귀 테스트와 ADR을 추가합니다. |
+
+구현 결과(2026-08-03): S8-01~S8-08 완료. App 109개와 Core 34개
+테스트가 통과했으며 피드백은 외부 전송 없이 로컬에만 저장됩니다.
 
 ## 9. 요구사항 추적
 
@@ -335,9 +389,18 @@ Sprint 종료 데모:
 | 피드 메타데이터만 처리 | S2-03, S2-04, S3-02 |
 | 최소 이벤트 저장 | S5-01~S5-06, S6-02~S6-04 |
 | 에이전트 기록 90일 보존 | S5-07 |
-| 설정 파일 수동 온보딩 | S6-07 |
+| 에이전트 설정 온보딩 | S6-07, DX-01, DX-02 |
 | 알림 거부 fallback | S5-11, S6-09 |
 | 개인용 DMG·macOS 14 | S6-13 |
+
+### 8.2 배포 UX 보강 — 완료
+
+| ID | 태스크 | 완료·검토 기준 |
+| --- | --- | --- |
+| DX-01 | 에이전트 자동 연결 | 사용자 동작으로만 실행하며 기존 설정 백업, 모래 항목 병합, 안정적인 helper 설치 경로를 제공합니다. |
+| DX-02 | Codex notify 공존 | 기존 notify가 있으면 payload를 그대로 전달하는 중계로 기존 동작을 유지합니다. |
+| DX-03 | Jira 인증 안내 | 사이트, 계정 이메일, 전체 API token, 연결 확인 순서와 token 생성 링크·401 오류를 inline으로 제공합니다. |
+| DX-04 | 설정 진입 개선 | 메뉴 설정 아이콘을 gear로 바꾸고 설정 창을 현재 active Space의 key window로 표시합니다. |
 
 ## 10. 명시적 비범위
 
@@ -346,7 +409,7 @@ Sprint 종료 데모:
 - 예약 오전 브리핑과 Slack 전송
 - 백그라운드 RSS 수집과 자동 재시도
 - AI 기반 아티클 요약과 아티클 원문 HTML 수집
-- WidgetKit 위젯과 마스코트 애니메이션
+- WidgetKit 위젯과 별도 마스코트 오버레이
 - 계정, 클라우드 동기화와 팀 기능
 - Git, GitHub, 미리 알림, 캘린더, Notion 연동
 - Codex App Server 기반 실행 중·승인·실패 추적
